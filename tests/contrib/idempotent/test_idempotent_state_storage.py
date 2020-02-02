@@ -52,12 +52,12 @@ class TestIdempotentStateStorage:
 
     def test_update_key(self, state_storage_with_update):
         storage = IdempotentStateStorage(state_storage_with_update)
-        updated_state = storage.update_key('node3', ['node2', 'node1'])
+        updated_state = storage.update_run_id('node3', ['node2', 'node1'])
 
         assert updated_state['node3']['inputs']['node2'] == updated_state['node2']['key']
         assert updated_state['node3']['inputs']['node1'] == updated_state['node1']['key']
 
-        updated_state = storage.update_key('node3', ['node2'])
+        updated_state = storage.update_run_id('node3', ['node2'])
         assert updated_state['node3']['inputs']['node2'] == updated_state['node2']['key']
         assert not updated_state['node3']['inputs'].get('node1', None)
 
