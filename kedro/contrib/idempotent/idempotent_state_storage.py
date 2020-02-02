@@ -66,4 +66,4 @@ class IdempotentStateStorage:
             for input_node in inputs
         ])
 
-        return actual_run_ids == expected_run_ids
+        return actual_run_ids != expected_run_ids
