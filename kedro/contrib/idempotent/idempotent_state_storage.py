@@ -10,22 +10,30 @@ NODE_STATE_FILE_PATH = os.getcwd() + '/data/01_raw/node_state.json'
 
 class IdempotentStateStorage:
 
-    def __init__(self, key_state=None, input_state=None):
-        self.run_id_state = {
+    def __init__(self, run_id_state=None, input_state=None):
+        if run_id_state is None:
+            run_id_state = {
+                # "node1": "qwer-qwer-wqer",
+                # "node2": "adsf-asdf-adsf"
+            }
+        if input_state is None:
+            input_state = {
+                # "node1": {},
+                # "node2": {
+                #     "node1": "qwer-qwer-qwer"
+            }
 
-        }
-        self.input_state = {
-
-        }
+        self.run_id_state = run_id_state
+        self.input_state = input_state
 
     @staticmethod
     def generate_run_id():
         return str(uuid4())
 
-    def update_run_id(self, node: str, key: str = None):
-        if key is None:
-            key = IdempotentStateStorage.generate_run_id()
-        self.run_id_state[node] = key
+    def update_run_id(self, node: str, run_id: str = None):
+        if run_id is None:
+            run_id = IdempotentStateStorage.generate_run_id()
+        self.run_id_state[node] = run_id
 
     def update_inputs(self, node: str, inputs: List[str]):
         self.input_state[node] = {
