@@ -45,8 +45,14 @@ class IdempotentStateStorage:
         }
         return self.state
 
+    def retrieve_key(self, node):
+        return self.state[node]['key']
+
+    def get_expected_inputs(self, node):
+        return self.state[node]['inputs'].items()
+
     def node_inputs_have_changed(self, node, inputs: List[str]):
-        expect_input_items = self.state[node]['inputs'].items()
+        expect_input_items = self.get_expected_inputs(node)
 
         # If any inputs are new or removed, node should be run
         expect_inputs = [input_node for input_node, key in expect_input_items]
@@ -59,7 +65,7 @@ class IdempotentStateStorage:
         ]
 
         actual_input_keys = [
-            self.state[input_node].get('key')
+            self.retrieve_key(input_node)
             for input_node, key in expect_input_items
         ]
 
