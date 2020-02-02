@@ -122,25 +122,25 @@ def saving_none_pipeline():
 
 class TestSeqentialRunnerBranchlessPipeline:
     def test_no_input_seq(self, branchless_no_input_pipeline):
-        outputs = IdempotentSequentialRunner().run(branchless_no_input_pipeline, DataCatalog())
+        outputs = IdempotentSequentialRunner().run_idempotently(branchless_no_input_pipeline, DataCatalog())
         assert "E" in outputs
         assert len(outputs) == 1
 
     def test_no_data_sets(self, branchless_pipeline):
         catalog = DataCatalog({}, {"ds1": 42})
-        outputs = IdempotentSequentialRunner().run(branchless_pipeline, catalog)
+        outputs = IdempotentSequentialRunner().run_idempotently(branchless_pipeline, catalog)
         assert "ds3" in outputs
         assert outputs["ds3"] == 42
 
     def test_no_feed(self, memory_catalog, branchless_pipeline):
-        outputs = IdempotentSequentialRunner().run(branchless_pipeline, memory_catalog)
+        outputs = IdempotentSequentialRunner().run_idempotently(branchless_pipeline, memory_catalog)
         assert "ds3" in outputs
         assert outputs["ds3"]["data"] == 42
 
     def test_node_returning_none(self, saving_none_pipeline):
         pattern = "Saving `None` to a `DataSet` is not allowed"
         with pytest.raises(DataSetError, match=pattern):
-            IdempotentSequentialRunner().run(saving_none_pipeline, DataCatalog())
+            IdempotentSequentialRunner().run_idempotently(saving_none_pipeline, DataCatalog())
 
     def test_result_saved_not_returned(self, saving_result_pipeline):
         """The pipeline runs ds->dsX but save does not save the output."""
@@ -157,7 +157,7 @@ class TestSeqentialRunnerBranchlessPipeline:
                 "dsX": LambdaDataSet(load=_load, save=_save),
             }
         )
-        output = IdempotentSequentialRunner().run(saving_result_pipeline, catalog)
+        output = IdempotentSequentialRunner().run_idempotently(saving_result_pipeline, catalog)
         assert output == {}
 
 
@@ -176,10 +176,10 @@ def unfinished_outputs_pipeline():
 
 class TestSeqentialRunnerBranchedPipeline:
     def test_input_seq(
-        self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
     ):
         memory_catalog.add_feed_dict(pandas_df_feed_dict, replace=True)
-        outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
+        outputs = IdempotentSequentialRunner().run_idempotently(unfinished_outputs_pipeline, memory_catalog)
         assert set(outputs.keys()) == {"ds8", "ds5", "ds6"}
         # the pipeline runs ds2->ds5
         assert outputs["ds5"] == [1, 2, 3, 4, 5]
@@ -190,11 +190,11 @@ class TestSeqentialRunnerBranchedPipeline:
         assert isinstance(outputs["ds6"], pd.DataFrame)
 
     def test_conflict_feed_catalog(
-        self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
     ):
         """ds1 and ds3 will be replaced with new inputs."""
         memory_catalog.add_feed_dict(conflicting_feed_dict, replace=True)
-        outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
+        outputs = IdempotentSequentialRunner().run_idempotently(unfinished_outputs_pipeline, memory_catalog)
         assert isinstance(outputs["ds8"], dict)
         assert outputs["ds8"]["data"] == 0
         assert isinstance(outputs["ds6"], pd.DataFrame)
@@ -202,7 +202,7 @@ class TestSeqentialRunnerBranchedPipeline:
     def test_unsatisfied_inputs(self, unfinished_outputs_pipeline):
         """ds1, ds2 and ds3 were not specified."""
         with pytest.raises(ValueError, match=r"not found in the DataCatalog"):
-            IdempotentSequentialRunner().run(unfinished_outputs_pipeline, DataCatalog())
+            IdempotentSequentialRunner().run_idempotently(unfinished_outputs_pipeline, DataCatalog())
 
 
 class LoggingDataSet(AbstractDataSet):
@@ -226,7 +226,7 @@ class LoggingDataSet(AbstractDataSet):
         return {}
 
 
-class TestSequentialRunnerRelease:
+class TestIdempotentSequentialRunnerRelease:
     def test_dont_release_inputs_and_outputs(self):
         log = []
         pipeline = Pipeline(
@@ -239,7 +239,7 @@ class TestSequentialRunnerRelease:
                 "out": LoggingDataSet(log, "out"),
             }
         )
-        IdempotentSequentialRunner().run(pipeline, catalog)
+        IdempotentSequentialRunner().run_idempotently(pipeline, catalog)
 
         # we don't want to see release in or out in here
         assert log == [("load", "in"), ("load", "middle"), ("release", "middle")]
@@ -259,7 +259,7 @@ class TestSequentialRunnerRelease:
                 "second": LoggingDataSet(log, "second"),
             }
         )
-        IdempotentSequentialRunner().run(pipeline, catalog)
+        IdempotentSequentialRunner().run_idempotently(pipeline, catalog)
 
         # we want to see "release first" before "load second"
         assert log == [
@@ -279,7 +279,7 @@ class TestSequentialRunnerRelease:
             ]
         )
         catalog = DataCatalog({"dataset": LoggingDataSet(log, "dataset")})
-        IdempotentSequentialRunner().run(pipeline, catalog)
+        IdempotentSequentialRunner().run_idempotently(pipeline, catalog)
 
         # we want to the release after both the loads
         assert log == [("load", "dataset"), ("load", "dataset"), ("release", "dataset")]
@@ -296,7 +296,7 @@ class TestSequentialRunnerRelease:
             }
         )
 
-        IdempotentSequentialRunner().run(pipeline, catalog)
+        IdempotentSequentialRunner().run_idempotently(pipeline, catalog)
 
         # we want to see both datasets being released
         assert log == [("release", "save"), ("load", "load"), ("release", "load")]
@@ -316,5 +316,5 @@ class TestSequentialRunnerRelease:
     def test_confirms(self, mocker, pipeline):
         fake_dataset_instance = mocker.Mock()
         catalog = DataCatalog(data_sets={"ds1": fake_dataset_instance})
-        IdempotentSequentialRunner().run(pipeline, catalog)
+        IdempotentSequentialRunner().run_idempotently(pipeline, catalog)
         fake_dataset_instance.confirm.assert_called_once_with()
