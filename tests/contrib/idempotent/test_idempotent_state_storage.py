@@ -50,7 +50,7 @@ class TestIdempotentStateStorage:
         assert storage.node_inputs_have_changed('node3', ['node2', 'node1'])
         assert storage.node_inputs_have_changed('node3', ['node2'])
 
-    def test_update_dey(self, state_storage_with_update):
+    def test_update_key(self, state_storage_with_update):
         storage = IdempotentStateStorage(state_storage_with_update)
         updated_state = storage.update_key('node3', ['node2', 'node1'])
 
