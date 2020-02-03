@@ -59,13 +59,16 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         # Update our idempotency state with new hashes
         state.update_run_id(parameter_input, str(hash(catalog.load(parameter_input))))
 
+    # Find all output that are MemoryDataSet
+    memory_outputs = [o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet]
+
     # Judge if the node should be run
     inputs_have_changed = state.node_inputs_have_changed(
         node.name,
         node.inputs
     )
     has_been_run = state.node_has_been_run(node.name)
-    should_run_node = not has_been_run or inputs_have_changed
+    should_run_node = not has_been_run or inputs_have_changed or len(memory_outputs) > 0
     if not should_run_node:
         return node
 
