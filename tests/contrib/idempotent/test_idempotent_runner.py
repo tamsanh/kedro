@@ -66,13 +66,16 @@ def conflicting_feed_dict(pandas_df_feed_dict):
     return {"ds1": ds1, "ds3": ds3}
 
 
+def random_str():
+    return str(random())
+
+
 def source():
     return "stuff"
 
 
 def identity(arg):
     return arg
-
 
 def sink(arg):
     pass
@@ -145,7 +148,7 @@ def txt_output_data_set(output_filepath_txt, request):
 class TestTestSeqentialRunnerMutipleRun:
 
     def test_node_with_mds_output(self, branchless_no_input_pipeline):
-        """If a node output as least 1 MemoryDataSet, it will be ran regardless of updates from its inputs"""
+        """If a node output as least 1 MemoryDataSet, it will be run regardless of updates from its inputs"""
 
         runner = IdempotentSequentialRunner()
 
@@ -158,20 +161,18 @@ class TestTestSeqentialRunnerMutipleRun:
         for dms_input in ['A', 'B', 'C', 'D', 'E']:
             assert run_id_state_round_1[dms_input] != run_id_state_round_2[dms_input]
 
-    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
-        """Nodes with no MemoryDataset as outputs, and no changes in inputs, should not run twice"""
-
-        input_data = "24"
+    def test_input_change(self, txt_input_data_set, txt_output_data_set):
+        """Nodes with no MemoryDataset as outputs, but has changes in inputs, should be run."""
 
         catalog = DataCatalog({
-            "memory": MemoryDataSet(data=input_data),
             "input_ds": txt_input_data_set,
             "output_ds": txt_output_data_set
         })
 
         pipeline = Pipeline([
-            node(identity, "memory", "input_ds"),
-            node(identity, "input_ds", "output_ds")
+            node(random_str, None, "memory", name="node1"),
+            node(identity, "memory", "input_ds", name="node2"),
+            node(identity, "input_ds", "output_ds", name="node3")
         ])
 
         runner = IdempotentSequentialRunner()
@@ -182,17 +183,100 @@ class TestTestSeqentialRunnerMutipleRun:
         runner.run(pipeline, catalog)
         run_id_state_round2 = runner.state_storage.run_id_state
 
-        assert Path(output_filepath_txt).read_text("utf-8") == input_data
+        # node1 outputs MemoryDataSet, will be run
+        assert run_id_state_round1['memory'] != run_id_state_round2['memory']
+        # node2's input has changed, will be run
+        assert run_id_state_round1['input_ds'] != run_id_state_round2['input_ds']
+        # node3's input has changed, will be run
+        assert run_id_state_round1['output_ds'] != run_id_state_round2['output_ds']
+
+    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
+        """Nodes with no MemoryDataset as outputs, and has no changes in inputs, should not be run"""
+
+        input_data = "24"
+
+        catalog = DataCatalog({
+            "memory": MemoryDataSet(data=input_data),
+            "input_ds": txt_input_data_set,
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(identity, "memory", "input_ds", name="node1"),
+            node(identity, "input_ds", "output_ds", name="node2")
+        ])
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round1 = runner.state_storage.run_id_state
+
+        runner.run(pipeline, catalog)
+        run_id_state_round2 = runner.state_storage.run_id_state
+
+        # assert Path(output_filepath_txt).read_text("utf-8") == input_data
 
         assert run_id_state_round1['memory'] == run_id_state_round2['memory']
+        # node1 won't be run
         assert run_id_state_round1['input_ds'] == run_id_state_round2['input_ds']
+        # node2 won't be run
         assert run_id_state_round1['output_ds'] == run_id_state_round2['output_ds']
 
-    def test_with_free_input_update(self):
-        pass
+    def test_with_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
+        """
+        Node with MemoryDataSet input should not be run
+        as long as the input has not changed.
 
-    def test_with_intermediate_change(self):
-        pass
+        Node produces that intermediate MemoryDataSet should run.
+        """
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data="42"),
+            "m2": MemoryDataSet(),
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(identity, "m1", "m2", name="node1"),
+            node(identity, "m2", "output_ds", name="node2")
+        ])
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_1 = runner.state_storage.run_id_state
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_2 = runner.state_storage.run_id_state
+
+        # node1 outputs MemoryDataSet, will be run
+        assert run_id_state_round_1['m2'] != run_id_state_round_2['m2']
+        # node2 will not be run
+        assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
+
+    def test_with_mds_change(self, txt_output_data_set):
+        """Node with a changed MemoryDataSet input should be run."""
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(),
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(random_str, None, "m1", name="node1"),
+            node(identity, "m1", "output_ds", name="node2")
+        ])
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_1 = runner.state_storage.run_id_state
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_2 = runner.state_storage.run_id_state
+
+        # node1 outputs MemoryDataSet, also its input has changed, will be run
+        assert run_id_state_round_1['m1'] != run_id_state_round_2['m1']
+        # node2's input has changed, will be run
+        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
 
 
 class TestSeqentialRunnerBranchlessPipeline:
