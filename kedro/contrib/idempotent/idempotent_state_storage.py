@@ -4,21 +4,26 @@ from typing import List
 
 class IdempotentStateStorage:
 
-    def __init__(self, run_id_state=None, input_state=None):
+    def __init__(self, run_id_state=None, input_state=None, nodes_have_been_run=None):
         if run_id_state is None:
             run_id_state = {
-                # "node1": "qwer-qwer-wqer",
-                # "node2": "adsf-asdf-adsf"
+                # "ds1": "qwer-qwer-wqer",
+                # "ds2": "adsf-asdf-adsf"
             }
         if input_state is None:
             input_state = {
                 # "node1": {},
                 # "node2": {
-                #     "node1": "qwer-qwer-qwer"
+                #     "ds1": "qwer-qwer-qwer"
+            }
+        if nodes_have_been_run is None:
+            nodes_have_been_run = {
+                # "node1": True
             }
 
         self.run_id_state = run_id_state
         self.input_state = input_state
+        self.nodes_have_been_run = nodes_have_been_run
 
     @staticmethod
     def generate_run_id():
@@ -35,11 +40,11 @@ class IdempotentStateStorage:
             for target_input in inputs
         }
 
-    def get_run_id(self, node: str):
-        return self.run_id_state.get(node)
+    def update_node_run_status(self, node: str):
+        self.nodes_have_been_run[node] = True
 
     def retrieve_run_id(self, node):
-        k = self.get_run_id(node)
+        k = self.run_id_state.get(node)
         if k is None:
             k = IdempotentStateStorage.generate_run_id()
             self.run_id_state[node] = k
@@ -49,11 +54,7 @@ class IdempotentStateStorage:
         return self.input_state.get(node, {})
 
     def node_has_been_run(self, node: str):
-        run_id = self.get_run_id(node)
-        if run_id is None:
-            return False
-        else:
-            return True
+        return self.nodes_have_been_run.get(node, False)
 
     def node_inputs_have_changed(self, node: str, inputs: List[str]):
         expect_input_items = self.get_expected_inputs(node)
