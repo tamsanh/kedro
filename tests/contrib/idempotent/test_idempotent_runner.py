@@ -123,35 +123,30 @@ def saving_none_pipeline():
 
 
 @pytest.fixture
-def filepath_txt(tmp_path):
-    return str(tmp_path / "test.txt")
-
-
-@pytest.fixture(params=[dict()])
-def txt_data_set(filepath_txt, request):
-    return TextLocalDataSet(filepath=filepath_txt, **request.param)
+def input_filepath_txt(tmp_path):
+    return str(tmp_path / "input.txt")
 
 
 @pytest.fixture
-def no_input_change_pipeline():
-    return Pipeline([
-        node(identity, "M1", "M2"),
-        node(sum, ["M2", "L1"], "L2")
-    ])
+def output_filepath_txt(tmp_path):
+    return str(tmp_path / "output.txt")
 
 
 @pytest.fixture(params=[dict()])
-def local_data_catalog(filepath_txt, request):
-    return DataCatalog({
-        "text_ds": TextLocalDataSet(filepath=filepath_txt, **request.param)
-    })
+def txt_input_data_set(input_filepath_txt, request):
+    return TextLocalDataSet(filepath=input_filepath_txt, **request.param)
+
+
+@pytest.fixture(params=[dict()])
+def txt_output_data_set(output_filepath_txt, request):
+    return TextLocalDataSet(filepath=output_filepath_txt, **request.param)
 
 
 class TestTestSeqentialRunnerMutipleRun:
 
     def test_node_with_mds_output(self, branchless_no_input_pipeline):
-        # If a node output as least 1 MemoryDataSet
-        # it should run regardless of updated from input
+        """If a node output as least 1 MemoryDataSet, it will be ran regardless of updates from its inputs"""
+
         runner = IdempotentSequentialRunner()
 
         runner.run(branchless_no_input_pipeline, DataCatalog())
@@ -163,11 +158,35 @@ class TestTestSeqentialRunnerMutipleRun:
         for dms_input in ['A', 'B', 'C', 'D', 'E']:
             assert run_id_state_round_1[dms_input] != run_id_state_round_2[dms_input]
 
-    def test_no_input_change(self, local_data_catalog, filepath_txt):
-        # test around load from and save to local text
-        txt_data_set = local_data_catalog.load('text_ds')
-        txt_data_set.save("a")
-        assert Path(filepath_txt).read_text("utf-8") == "a"
+    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
+        """Nodes with no MemoryDataset as outputs, and no changes in inputs, should not run twice"""
+
+        input_data = "24"
+
+        catalog = DataCatalog({
+            "memory": MemoryDataSet(data=input_data),
+            "input_ds": txt_input_data_set,
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(identity, "memory", "input_ds"),
+            node(identity, "input_ds", "output_ds")
+        ])
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round1 = runner.state_storage.run_id_state
+
+        runner.run(pipeline, catalog)
+        run_id_state_round2 = runner.state_storage.run_id_state
+
+        assert Path(output_filepath_txt).read_text("utf-8") == input_data
+
+        assert run_id_state_round1['memory'] == run_id_state_round2['memory']
+        assert run_id_state_round1['input_ds'] == run_id_state_round2['input_ds']
+        assert run_id_state_round1['output_ds'] == run_id_state_round2['output_ds']
 
     def test_with_free_input_update(self):
         pass
@@ -178,8 +197,7 @@ class TestTestSeqentialRunnerMutipleRun:
 
 class TestSeqentialRunnerBranchlessPipeline:
     def test_no_input_seq(self, branchless_no_input_pipeline):
-        runner = IdempotentSequentialRunner()
-        outputs = runner.run(branchless_no_input_pipeline, DataCatalog())
+        outputs = IdempotentSequentialRunner().run(branchless_no_input_pipeline, DataCatalog())
         assert "E" in outputs
         assert len(outputs) == 1
 
@@ -233,7 +251,7 @@ def unfinished_outputs_pipeline():
 
 class TestSeqentialRunnerBranchedPipeline:
     def test_input_seq(
-            self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
+        self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
     ):
         memory_catalog.add_feed_dict(pandas_df_feed_dict, replace=True)
         outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
@@ -247,7 +265,7 @@ class TestSeqentialRunnerBranchedPipeline:
         assert isinstance(outputs["ds6"], pd.DataFrame)
 
     def test_conflict_feed_catalog(
-            self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
+        self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
     ):
         """ds1 and ds3 will be replaced with new inputs."""
         memory_catalog.add_feed_dict(conflicting_feed_dict, replace=True)
