@@ -32,7 +32,6 @@ of provided nodes.
 
 from collections import Counter
 from itertools import chain
-from typing import Dict, Any
 
 from kedro.contrib.idempotent.idempotent_state_storage import IdempotentStateStorage
 from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
@@ -53,14 +52,26 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         The node argument.
 
     """
+    # Find all inputs that are parameters
+    parameter_inputs = [i for i in node.inputs if i.startswith("params:")]
+    # Hash them as the key after loading
+    for parameter_input in parameter_inputs:
+        # Update our idempotency state with new hashes
+        state.update_run_id(parameter_input, str(hash(catalog.load(parameter_input))))
+
+    # Then we can compare if inputs have changed
+    inputs_have_changed = state.node_inputs_have_changed(
+        node.name,
+        node.inputs
+    )
+    if not inputs_have_changed:
+        return node
 
     inputs = {name: catalog.load(name) for name in node.inputs}
     outputs = node.run(inputs)
     for name, data in outputs.items():
         catalog.save(name, data)
         state.update_run_id(name)
-    for name in node.confirms:
-        catalog.confirm(name)
 
     state.update_inputs(node.name, node.inputs)
     return node
@@ -75,47 +86,6 @@ class IdempotentSequentialRunner(AbstractRunner):
     def __init__(self):
         super().__init__()
         self.state_storage = IdempotentStateStorage()
-
-    def run_idempotently(self, pipeline: Pipeline, catalog: DataCatalog) -> Dict[str, Any]:
-        """Run only the nodes with updated inputs from the ``Pipeline`` using the
-        ``DataSet``s provided by ``catalog`` and save results back to the same
-        objects.
-
-        Args:
-            pipeline: The ``Pipeline`` to run.
-            catalog: The ``DataCatalog`` from which to fetch data.
-        Raises:
-            ValueError: Raised when ``Pipeline`` inputs cannot be satisfied.
-
-        Returns:
-            Any node outputs that cannot be processed by the ``DataCatalog``.
-            These are returned in a dictionary, where the keys are defined
-            by the node outputs.
-
-        """
-
-        # Find all inputs that are parameters
-        parameter_inputs = [
-            i
-            for i in pipeline.inputs()
-            if i.startswith("params:")
-        ]
-        # Hash them as the key after loading
-        for parameter_input in parameter_inputs:
-            # Update our idempotency state with new hashes
-            self.state_storage.update_run_id(parameter_input, str(hash(catalog.load(parameter_input))))
-
-        # Then we can compare if inputs have changed
-
-        def inputs_have_changes(node):
-            return self.state_storage.node_inputs_have_changed(node.name, node.inputs)
-
-        nodes_to_run = list(filter(inputs_have_changes, pipeline.nodes))
-        to_rerun = pipeline.from_nodes(
-            *list(map(lambda node: node.name, nodes_to_run))
-        )
-
-        return self.run(to_rerun, catalog)
 
     def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
         """Factory method for creating the default data set for the runner.
