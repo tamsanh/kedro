@@ -59,12 +59,14 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         # Update our idempotency state with new hashes
         state.update_run_id(parameter_input, str(hash(catalog.load(parameter_input))))
 
-    # Then we can compare if inputs have changed
+    # Judge if the node should be run
     inputs_have_changed = state.node_inputs_have_changed(
         node.name,
         node.inputs
     )
-    if not inputs_have_changed:
+    has_been_run = state.node_has_been_run(node.name)
+    should_run_node = not has_been_run or inputs_have_changed
+    if not should_run_node:
         return node
 
     inputs = {name: catalog.load(name) for name in node.inputs}

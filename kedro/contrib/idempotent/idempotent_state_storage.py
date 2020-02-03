@@ -1,11 +1,5 @@
-import os
 from uuid import uuid4
 from typing import List
-
-from kedro.io import JSONLocalDataSet
-from kedro.io.core import DataSetError
-
-NODE_STATE_FILE_PATH = os.getcwd() + '/data/01_raw/node_state.json'
 
 
 class IdempotentStateStorage:
@@ -41,17 +35,27 @@ class IdempotentStateStorage:
             for target_input in inputs
         }
 
+    def get_run_id(self, node: str):
+        return self.run_id_state.get(node)
+
     def retrieve_run_id(self, node):
-        k = self.run_id_state.get(node)
+        k = self.get_run_id(node)
         if k is None:
             k = IdempotentStateStorage.generate_run_id()
             self.run_id_state[node] = k
         return k
 
-    def get_expected_inputs(self, node):
+    def get_expected_inputs(self, node: str):
         return self.input_state.get(node, {})
 
-    def node_inputs_have_changed(self, node, inputs: List[str]):
+    def node_has_been_run(self, node: str):
+        run_id = self.get_run_id(node)
+        if run_id is None:
+            return False
+        else:
+            return True
+
+    def node_inputs_have_changed(self, node: str, inputs: List[str]):
         expect_input_items = self.get_expected_inputs(node)
 
         # If any inputs are new or removed, node should be run
