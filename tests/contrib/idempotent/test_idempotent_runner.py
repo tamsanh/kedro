@@ -153,10 +153,10 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(branchless_no_input_pipeline, DataCatalog())
-        run_id_state_round_1 = runner.state_storage.run_id_state
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(branchless_no_input_pipeline, DataCatalog())
-        run_id_state_round_2 = runner.state_storage.run_id_state
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         for dms_input in ['A', 'B', 'C', 'D', 'E']:
             assert run_id_state_round_1[dms_input] != run_id_state_round_2[dms_input]
@@ -178,10 +178,10 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round1 = runner.state_storage.run_id_state
+        run_id_state_round1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round2 = runner.state_storage.run_id_state
+        run_id_state_round2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
         assert run_id_state_round1['memory'] != run_id_state_round2['memory']
@@ -209,10 +209,10 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round1 = runner.state_storage.run_id_state
+        run_id_state_round1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round2 = runner.state_storage.run_id_state
+        run_id_state_round2 = runner.state_storage.run_id_state.copy()
 
         # assert Path(output_filepath_txt).read_text("utf-8") == input_data
 
@@ -243,10 +243,10 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round_1 = runner.state_storage.run_id_state
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round_2 = runner.state_storage.run_id_state
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
         assert run_id_state_round_1['m2'] != run_id_state_round_2['m2']
@@ -268,10 +268,10 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round_1 = runner.state_storage.run_id_state
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round_2 = runner.state_storage.run_id_state
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, also its input has changed, will be run
         assert run_id_state_round_1['m1'] != run_id_state_round_2['m1']
