@@ -74,6 +74,8 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
     for name, data in outputs.items():
         catalog.save(name, data)
         state.update_run_id(name)
+    for name in node.confirms:
+        catalog.confirm(name)
 
     state.update_inputs(node.name, node.inputs)
     return node
