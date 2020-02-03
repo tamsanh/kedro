@@ -29,6 +29,7 @@
 # pylint: disable=unused-argument
 from random import random
 from typing import Any, Dict
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -39,6 +40,7 @@ from kedro.io import (
     DataSetError,
     LambdaDataSet,
     MemoryDataSet,
+    TextLocalDataSet
 )
 from kedro.pipeline import Pipeline, node
 from kedro.contrib.idempotent.idempotent_runner import IdempotentSequentialRunner
@@ -120,9 +122,64 @@ def saving_none_pipeline():
     )
 
 
+@pytest.fixture
+def filepath_txt(tmp_path):
+    return str(tmp_path / "test.txt")
+
+
+@pytest.fixture(params=[dict()])
+def txt_data_set(filepath_txt, request):
+    return TextLocalDataSet(filepath=filepath_txt, **request.param)
+
+
+@pytest.fixture
+def no_input_change_pipeline():
+    return Pipeline([
+        node(identity, "M1", "M2"),
+        node(sum, ["M2", "L1"], "L2")
+    ])
+
+
+@pytest.fixture(params=[dict()])
+def local_data_catalog(filepath_txt, request):
+    return DataCatalog({
+        "text_ds": TextLocalDataSet(filepath=filepath_txt, **request.param)
+    })
+
+
+class TestTestSeqentialRunnerMutipleRun:
+
+    def test_node_with_mds_output(self, branchless_no_input_pipeline):
+        # If a node output as least 1 MemoryDataSet
+        # it should run regardless of updated from input
+        runner = IdempotentSequentialRunner()
+
+        runner.run(branchless_no_input_pipeline, DataCatalog())
+        run_id_state_round_1 = runner.state_storage.run_id_state
+
+        runner.run(branchless_no_input_pipeline, DataCatalog())
+        run_id_state_round_2 = runner.state_storage.run_id_state
+
+        for dms_input in ['A', 'B', 'C', 'D', 'E']:
+            assert run_id_state_round_1[dms_input] != run_id_state_round_2[dms_input]
+
+    def test_no_input_change(self, local_data_catalog, filepath_txt):
+        # test around load from and save to local text
+        txt_data_set = local_data_catalog.load('text_ds')
+        txt_data_set.save("a")
+        assert Path(filepath_txt).read_text("utf-8") == "a"
+
+    def test_with_free_input_update(self):
+        pass
+
+    def test_with_intermediate_change(self):
+        pass
+
+
 class TestSeqentialRunnerBranchlessPipeline:
     def test_no_input_seq(self, branchless_no_input_pipeline):
-        outputs = IdempotentSequentialRunner().run(branchless_no_input_pipeline, DataCatalog())
+        runner = IdempotentSequentialRunner()
+        outputs = runner.run(branchless_no_input_pipeline, DataCatalog())
         assert "E" in outputs
         assert len(outputs) == 1
 
@@ -176,7 +233,7 @@ def unfinished_outputs_pipeline():
 
 class TestSeqentialRunnerBranchedPipeline:
     def test_input_seq(
-        self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
     ):
         memory_catalog.add_feed_dict(pandas_df_feed_dict, replace=True)
         outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
@@ -190,7 +247,7 @@ class TestSeqentialRunnerBranchedPipeline:
         assert isinstance(outputs["ds6"], pd.DataFrame)
 
     def test_conflict_feed_catalog(
-        self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
     ):
         """ds1 and ds3 will be replaced with new inputs."""
         memory_catalog.add_feed_dict(conflicting_feed_dict, replace=True)
