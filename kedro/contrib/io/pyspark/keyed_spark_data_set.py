@@ -16,11 +16,11 @@ class KeyedSparkData(dict):
         super().__init__()
         self.key = key
 
-    def get_latest_data_key(self):
+    def latest_key(self):
         return max(self.keys())
 
-    def get_latest_data(self):
-        return self[self.get_latest_data_key()]
+    def latest_data(self):
+        return self[self.latest_key()]
 
 
 class KeyedSparkDataSet(SparkDataSet, abc.ABC):
@@ -81,7 +81,7 @@ class KeyedSparkDataSet(SparkDataSet, abc.ABC):
 
         threads = []
         for ti in range(5):
-            t = threading.Thread(target=_save_data_item, name='KeyedSparkDataLoader %s' % ti)
+            t = threading.Thread(target=_save_data_item, name='KeyedSparkDataSaver %s' % ti)
             t.daemon = True
             threads.append(t)
             t.start()
