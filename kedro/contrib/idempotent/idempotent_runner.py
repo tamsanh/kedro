@@ -29,7 +29,8 @@
 used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
-
+import hashlib
+import pandas as pd
 from collections import Counter
 from itertools import chain
 
@@ -38,6 +39,18 @@ from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.runner.runner import AbstractRunner
+
+
+def get_hash_value(data):
+    data_type = type(data)
+    if data_type == dict:
+        return str(hash(frozenset(data.items())))
+    elif data_type == list:
+        return str(hash(str(data)))
+    elif data_type == pd.DataFrame:
+        return hashlib.sha256(pd.util.hash_pandas_object(data, index=True).values).hexdigest()
+    else:
+        return str(hash(data))
 
 
 def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool) -> Node:
@@ -60,7 +73,7 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         # Hash them as the key after loading
         for parameter_input in parameter_inputs:
             # Update our idempotency state with new hashes
-            state.update_run_id(parameter_input, str(hash(catalog.load(parameter_input))))
+            state.update_run_id(parameter_input, get_hash_value(catalog.load(parameter_input)))
 
         # Find all output that are MemoryDataSet
         memory_outputs = [o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet]
@@ -81,7 +94,7 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         catalog.save(name, data)
         run_id = None
         if type(catalog._data_sets[name]) == MemoryDataSet:
-            run_id = str(hash(data))
+            run_id = get_hash_value(data)
         state.update_run_id(name, run_id)
     for name in node.confirms:
         catalog.confirm(name)
