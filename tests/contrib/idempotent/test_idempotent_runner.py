@@ -249,7 +249,7 @@ class TestTestSeqentialRunnerMutipleRun:
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
-        assert run_id_state_round_1['m2'] != run_id_state_round_2['m2']
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
         # node2 will not be run
         assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
 
