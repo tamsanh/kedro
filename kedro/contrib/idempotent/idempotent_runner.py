@@ -42,7 +42,13 @@ from kedro.runner.runner import AbstractRunner
 
 
 def get_hash_value(data):
-    return json.dumps(data, sort_keys=True, default=str)
+    hash_value = str(hash(json.dumps(data, sort_keys=True, default=str)))
+    if type(data) == pd.DataFrame:
+        try:
+            hash_value = pd.util.hash_pandas_object(data, index=True).sum()
+        except:
+            pass
+    return hash_value
 
 
 def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool) -> Node:
