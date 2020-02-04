@@ -29,7 +29,7 @@
 used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
-import hashlib
+import json
 import pandas as pd
 from collections import Counter
 from itertools import chain
@@ -42,15 +42,7 @@ from kedro.runner.runner import AbstractRunner
 
 
 def get_hash_value(data):
-    data_type = type(data)
-    if data_type == dict:
-        return str(hash(frozenset(data.items())))
-    elif data_type == list:
-        return str(hash(str(data)))
-    elif data_type == pd.DataFrame:
-        return hashlib.sha256(pd.util.hash_pandas_object(data, index=True).values).hexdigest()
-    else:
-        return str(hash(data))
+    return json.dumps(data, sort_keys=True, default=str)
 
 
 def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool) -> Node:

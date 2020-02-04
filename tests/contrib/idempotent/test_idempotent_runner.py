@@ -288,7 +288,8 @@ class TestSeqentialRunnerHashingValue:
 
         input_data = pd.DataFrame({
             "hello": [123.456, 4],
-            "date": [datetime.date(datetime.now()), datetime.now()]
+            "date": [datetime.date(datetime.now()), datetime.now()],
+            "list": [[1,2], [3,4]]
         })
 
         pipeline = Pipeline([
