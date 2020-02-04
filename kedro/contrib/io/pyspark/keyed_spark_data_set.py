@@ -2,6 +2,7 @@ import abc
 import threading
 from pathlib import PosixPath
 from typing import Dict, List
+from timeit import default_timer
 
 from pyspark.sql.utils import AnalysisException
 
@@ -42,52 +43,80 @@ class KeyedSparkDataSet(SparkDataSet, abc.ABC):
 
         loaded_dict = KeyedSparkData(self.key)
         data_keys = self.get_data_keys()
-        threads = []
+        exceptions = {}
 
-        def _load_data_key():
+        def _load_data_key(name):
             while True:
                 try:
                     data_key = data_keys.pop()
+                    target_load_path = self._generate_path_from_value(load_path, data_key)
+                    start = default_timer()
+                    loaded_dict[data_key] = self._get_spark().read.load(
+                        target_load_path, self._file_format, **self._load_args
+                    )
+                    end = default_timer()
+                    self._logger.debug('%(threadName)s: %s %s', data_key, (end - start))
                 except IndexError:
                     return
-                target_load_path = self._generate_path_from_value(load_path, data_key)
-                loaded_dict[data_key] = self._get_spark().read.load(
-                    target_load_path, self._file_format, **self._load_args
-                )
+                except KeyboardInterrupt as e:
+                    raise e
+                except Exception as e:
+                    exceptions[name] = e
+                    return
 
+        self._logger.info("Loading %s data_keys for %s", len(data_keys), self.key)
+        threads = []
         for ti in range(5):
-            t = threading.Thread(target=_load_data_key, name='KeyedSparkDataLoader %s' % ti)
+            thread_name = 'KeyedSparkDataLoader %s' % ti
+            t = threading.Thread(target=_load_data_key, name=thread_name, args=(thread_name,))
             t.daemon = True
             threads.append(t)
             t.start()
 
         for t in threads:
             t.join(999999999)
+
+        if len(exceptions) > 0:
+            raise DataSetError('Failed to load data keys: %s', list(exceptions.values())[0])
 
         return loaded_dict
 
     def _save(self, data: Dict[str, DataFrame]) -> None:
         save_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_save_path()))
-        data_items = data.items()
+        data_items = list(data.items())
+        exceptions = {}
 
-        def _save_data_item():
+        def _save_data_item(name):
             while True:
                 try:
                     data_key, df = data_items.pop()
+                    target_save_path = self._generate_path_from_value(save_path, data_key)
+                    start = default_timer()
+                    df.write.save(target_save_path, self._file_format, **self._save_args)
+                    end = default_timer()
+                    self._logger.debug('%(threadName)s: %s %s', data_key, (end - start))
                 except IndexError:
                     return
-                target_save_path = self._generate_path_from_value(save_path, data_key)
-                df.write.save(target_save_path, self._file_format, **self._save_args)
+                except KeyboardInterrupt as e:
+                    raise e
+                except Exception as e:
+                    exceptions[name] = e
+                    return
 
+        self._logger.info("Saving %s data_keys for %s", len(data_items), self.key)
         threads = []
         for ti in range(5):
-            t = threading.Thread(target=_save_data_item, name='KeyedSparkDataSaver %s' % ti)
+            thread_name = 'KeyedSparkDataSaver %s' % ti
+            t = threading.Thread(target=_save_data_item, name=thread_name, args=(thread_name,))
             t.daemon = True
             threads.append(t)
             t.start()
 
         for t in threads:
             t.join(999999999)
+
+        if len(exceptions) > 0:
+            raise DataSetError('Failed to save data keys: %s', list(exceptions.values())[0])
 
     def _exists(self) -> bool:
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_load_path()))
