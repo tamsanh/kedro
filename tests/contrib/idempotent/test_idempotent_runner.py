@@ -145,9 +145,42 @@ def txt_output_data_set(output_filepath_txt, request):
     return TextLocalDataSet(filepath=output_filepath_txt, **request.param)
 
 
+output_mds_node_run_count = 0
+
+
+def indentity_with_side_effect(arg):
+    global output_mds_node_run_count
+    output_mds_node_run_count += 1
+    return arg
+
+
 class TestTestSeqentialRunnerMutipleRun:
 
-    def test_node_with_mds_output(self, branchless_no_input_pipeline):
+    def test_output_mds(self):
+        input_data = 24
+
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2")
+        ])
+
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data=input_data),
+            "m2": MemoryDataSet()
+        })
+
+        runner = IdempotentSequentialRunner()
+        runner.run(pipeline, catalog)
+        count_round_1 = output_mds_node_run_count
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline, catalog)
+        count_round_2 = output_mds_node_run_count
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert count_round_1 != count_round_2
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+
+    def test_changed_mds_output(self, branchless_no_input_pipeline):
         """If a node output as least 1 MemoryDataSet, it will be run regardless of updates from its inputs"""
 
         runner = IdempotentSequentialRunner()
