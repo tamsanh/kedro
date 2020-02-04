@@ -145,18 +145,14 @@ def txt_output_data_set(output_filepath_txt, request):
     return TextLocalDataSet(filepath=output_filepath_txt, **request.param)
 
 
-output_mds_node_run_count = 0
+def create_stateful_identity():
+    state = {'runs': 0}
 
+    def _stateful_identity(arg):
+        state['runs'] = state['runs'] + 1
+        return arg
 
-def reset_counter():
-    global output_mds_node_run_count
-    output_mds_node_run_count = 0
-
-
-def indentity_with_side_effect(arg):
-    global output_mds_node_run_count
-    output_mds_node_run_count += 1
-    return arg
+    return state, _stateful_identity
 
 
 class TestForcedSeqentialRunner:
@@ -164,13 +160,13 @@ class TestForcedSeqentialRunner:
     def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
         """Every single node should be run"""
 
-        reset_counter()
-
         catalog = DataCatalog({
             "memory": MemoryDataSet(data="24"),
             "input_ds": txt_input_data_set,
             "output_ds": txt_output_data_set
         })
+
+        state, indentity_with_side_effect = create_stateful_identity()
 
         pipeline = Pipeline([
             node(indentity_with_side_effect, "memory", "input_ds", name="node1"),
@@ -185,7 +181,7 @@ class TestForcedSeqentialRunner:
         runner.run(pipeline, catalog)
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
-        assert output_mds_node_run_count == 4
+        assert state['runs'] == 4
 
         assert run_id_state_round_1['memory'] == run_id_state_round_2['memory']
         assert run_id_state_round_1['input_ds'] != run_id_state_round_2['input_ds']
@@ -194,7 +190,7 @@ class TestForcedSeqentialRunner:
     def test_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
         """Every single node should be run"""
 
-        reset_counter()
+        state, indentity_with_side_effect = create_stateful_identity()
 
         catalog = DataCatalog({
             "m1": MemoryDataSet(data="42"),
@@ -215,27 +211,25 @@ class TestForcedSeqentialRunner:
         runner.run(pipeline, catalog)
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
-        assert output_mds_node_run_count == 4
+        assert state['runs'] == 4
         assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
         assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
 
 
-@pytest.fixture
-def pipeline_with_side_effet():
-    return Pipeline([
-        node(indentity_with_side_effect, "m1", "m2")
-    ])
-
-
 class TestSeqentialRunnerHashingValue:
-    def test_date_object_in_dict(self, pipeline_with_side_effet):
-        reset_counter()
+    def test_date_object_in_dict(self):
         input_data = {
             "today": datetime.date(datetime.now()),
             "str": "hello",
             "list": [1.11, "world", {"hello world": datetime.now()}]
         }
 
+        state, indentity_with_side_effect = create_stateful_identity()
+
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2")
+        ])
+
         catalog = DataCatalog({
             "m1": MemoryDataSet(data=input_data),
             "m2": MemoryDataSet()
@@ -243,12 +237,12 @@ class TestSeqentialRunnerHashingValue:
 
         runner = IdempotentSequentialRunner()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_1 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_1 = state['runs']
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_2 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_2 = state['runs']
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
@@ -256,14 +250,19 @@ class TestSeqentialRunnerHashingValue:
         assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
         assert catalog.load('m2') == input_data
 
-    def test_date_object_in_list(self, pipeline_with_side_effet):
-        reset_counter()
+    def test_date_object_in_list(self):
+        state, indentity_with_side_effect = create_stateful_identity()
+
         input_data = [
             "hello", 123.456, 4,
             datetime.date(datetime.now()),
             ["world", {"hello world": datetime.now()}]
         ]
 
+        pipline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2")
+        ])
+
         catalog = DataCatalog({
             "m1": MemoryDataSet(data=input_data),
             "m2": MemoryDataSet()
@@ -271,12 +270,12 @@ class TestSeqentialRunnerHashingValue:
 
         runner = IdempotentSequentialRunner()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_1 = output_mds_node_run_count
+        runner.run(pipline, catalog)
+        count_round_1 = state['runs']
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_2 = output_mds_node_run_count
+        runner.run(pipline, catalog)
+        count_round_2 = state['runs']
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
@@ -284,12 +283,17 @@ class TestSeqentialRunnerHashingValue:
         assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
         assert catalog.load('m2') == input_data
 
-    def test_date_object_in_df(self, pipeline_with_side_effet):
-        reset_counter()
+    def test_date_object_in_df(self):
+        state, indentity_with_side_effect = create_stateful_identity()
+
         input_data = pd.DataFrame({
             "hello": [123.456, 4],
             "date": [datetime.date(datetime.now()), datetime.now()]
         })
+
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2")
+        ])
 
         catalog = DataCatalog({
             "m1": MemoryDataSet(data=input_data),
@@ -298,12 +302,12 @@ class TestSeqentialRunnerHashingValue:
 
         runner = IdempotentSequentialRunner()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_1 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_1 = state['runs']
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_2 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_2 = state['runs']
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
@@ -314,22 +318,27 @@ class TestSeqentialRunnerHashingValue:
 
 class TestSeqentialRunnerMutipleRun:
 
-    def test_output_mds(self, pipeline_with_side_effet):
-        reset_counter()
+    def test_output_mds(self):
         input_data = 24
+
+        state, indentity_with_side_effect = create_stateful_identity()
 
         catalog = DataCatalog({
             "m1": MemoryDataSet(data=input_data),
             "m2": MemoryDataSet()
         })
 
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2")
+        ])
+
         runner = IdempotentSequentialRunner()
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_1 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_1 = state['runs']
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
-        runner.run(pipeline_with_side_effet, catalog)
-        count_round_2 = output_mds_node_run_count
+        runner.run(pipeline, catalog)
+        count_round_2 = state['runs']
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 != count_round_2
