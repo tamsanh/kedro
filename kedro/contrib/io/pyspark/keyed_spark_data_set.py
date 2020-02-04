@@ -98,8 +98,8 @@ class AlluxioKeyedSparkDataSet(KeyedSparkDataSet):
         )
         out, err = pobj.communicate()
         if pobj.returncode and retry_num > max_retries:
-            raise FailedToRetrieveAlluxioList(err)
-        return out
+            raise FailedToRetrieveAlluxioList(err.decode('utf8'))
+        return out.decode('utf8')
 
     def get_data_keys(self) -> List[str]:
         """Gets the data keys for the file path
