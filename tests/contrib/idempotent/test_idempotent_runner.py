@@ -29,8 +29,7 @@
 # pylint: disable=unused-argument
 from random import random
 from typing import Any, Dict
-from pathlib import Path
-
+from datetime import datetime
 import pandas as pd
 import pytest
 
@@ -76,6 +75,7 @@ def source():
 
 def identity(arg):
     return arg
+
 
 def sink(arg):
     pass
@@ -220,15 +220,21 @@ class TestForcedSeqentialRunner:
         assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
 
 
-class TestSeqentialRunnerMutipleRun:
+@pytest.fixture
+def pipeline_with_side_effet():
+    return Pipeline([
+        node(indentity_with_side_effect, "m1", "m2")
+    ])
 
-    def test_output_mds(self):
+
+class TestSeqentialRunnerHashingValue:
+    def test_date_object_in_dict(self, pipeline_with_side_effet):
         reset_counter()
-        input_data = 24
-
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2")
-        ])
+        input_data = {
+            "today": datetime.date(datetime.now()),
+            "str": "hello",
+            "list": [1.11, "world", {"hello world": datetime.now()}]
+        }
 
         catalog = DataCatalog({
             "m1": MemoryDataSet(data=input_data),
@@ -236,11 +242,93 @@ class TestSeqentialRunnerMutipleRun:
         })
 
         runner = IdempotentSequentialRunner()
-        runner.run(pipeline, catalog)
+
+        runner.run(pipeline_with_side_effet, catalog)
         count_round_1 = output_mds_node_run_count
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
-        runner.run(pipeline, catalog)
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_2 = output_mds_node_run_count
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert count_round_1 == 1
+        assert count_round_2 == 2
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert catalog.load('m2') == input_data
+
+    def test_date_object_in_list(self, pipeline_with_side_effet):
+        reset_counter()
+        input_data = [
+            "hello", 123.456, 4,
+            datetime.date(datetime.now()),
+            ["world", {"hello world": datetime.now()}]
+        ]
+
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data=input_data),
+            "m2": MemoryDataSet()
+        })
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_1 = output_mds_node_run_count
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_2 = output_mds_node_run_count
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert count_round_1 == 1
+        assert count_round_2 == 2
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert catalog.load('m2') == input_data
+
+    def test_date_object_in_df(self, pipeline_with_side_effet):
+        reset_counter()
+        input_data = pd.DataFrame({
+            "hello": [123.456, 4],
+            "date": [datetime.date(datetime.now()), datetime.now()]
+        })
+
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data=input_data),
+            "m2": MemoryDataSet()
+        })
+
+        runner = IdempotentSequentialRunner()
+
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_1 = output_mds_node_run_count
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_2 = output_mds_node_run_count
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert count_round_1 == 1
+        assert count_round_2 == 2
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert catalog.load('m2').shape == input_data.shape
+
+
+class TestSeqentialRunnerMutipleRun:
+
+    def test_output_mds(self, pipeline_with_side_effet):
+        reset_counter()
+        input_data = 24
+
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data=input_data),
+            "m2": MemoryDataSet()
+        })
+
+        runner = IdempotentSequentialRunner()
+        runner.run(pipeline_with_side_effet, catalog)
+        count_round_1 = output_mds_node_run_count
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline_with_side_effet, catalog)
         count_round_2 = output_mds_node_run_count
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
