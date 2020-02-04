@@ -1,4 +1,5 @@
 import abc
+import threading
 from pathlib import PosixPath
 from typing import Dict, List
 
@@ -40,19 +41,53 @@ class KeyedSparkDataSet(SparkDataSet, abc.ABC):
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_load_path()))
 
         loaded_dict = KeyedSparkData(self.key)
-        for data_key in self.get_data_keys():
-            target_load_path = self._generate_path_from_value(load_path, data_key)
-            loaded_dict[data_key] = self._get_spark().read.load(
-                target_load_path, self._file_format, **self._load_args
-            )
+        data_keys = self.get_data_keys()
+        threads = []
+
+        def _load_data_key():
+            while True:
+                try:
+                    data_key = data_keys.pop()
+                except IndexError:
+                    return
+                target_load_path = self._generate_path_from_value(load_path, data_key)
+                loaded_dict[data_key] = self._get_spark().read.load(
+                    target_load_path, self._file_format, **self._load_args
+                )
+
+        for ti in range(5):
+            t = threading.Thread(target=_load_data_key, name='KeyedSparkDataLoader %s' % ti)
+            t.daemon = True
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join(999999999)
+
         return loaded_dict
 
     def _save(self, data: Dict[str, DataFrame]) -> None:
         save_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_save_path()))
+        data_items = data.items()
 
-        for data_key, df in data.items():
-            target_save_path = self._generate_path_from_value(save_path, data_key)
-            df.write.save(target_save_path, self._file_format, **self._save_args)
+        def _save_data_item():
+            while True:
+                try:
+                    data_key, df = data_items.pop()
+                except IndexError:
+                    return
+                target_save_path = self._generate_path_from_value(save_path, data_key)
+                df.write.save(target_save_path, self._file_format, **self._save_args)
+
+        threads = []
+        for ti in range(5):
+            t = threading.Thread(target=_save_data_item, name='KeyedSparkDataLoader %s' % ti)
+            t.daemon = True
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join(999999999)
 
     def _exists(self) -> bool:
         load_path = _strip_dbfs_prefix(self._fs_prefix + str(self._get_load_path()))
