@@ -43,7 +43,7 @@ from kedro.io import (
     TextLocalDataSet
 )
 from kedro.pipeline import Pipeline, node
-from kedro.contrib.idempotent.idempotent_runner import IdempotentSequentialRunner
+from kedro.contrib.idempotent.idempotent_runner import IdempotentSequentialRunner, ForcedIdempotentSequentialRunner
 
 
 @pytest.fixture
@@ -148,15 +148,82 @@ def txt_output_data_set(output_filepath_txt, request):
 output_mds_node_run_count = 0
 
 
+def reset_counter():
+    global output_mds_node_run_count
+    output_mds_node_run_count = 0
+
+
 def indentity_with_side_effect(arg):
     global output_mds_node_run_count
     output_mds_node_run_count += 1
     return arg
 
 
+class TestForcedSeqentialRunner:
+
+    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
+        """Every single node should be run"""
+
+        reset_counter()
+
+        catalog = DataCatalog({
+            "memory": MemoryDataSet(data="24"),
+            "input_ds": txt_input_data_set,
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "memory", "input_ds", name="node1"),
+            node(indentity_with_side_effect, "input_ds", "output_ds", name="node2")
+        ])
+
+        runner = ForcedIdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert output_mds_node_run_count == 4
+
+        assert run_id_state_round_1['memory'] == run_id_state_round_2['memory']
+        assert run_id_state_round_1['input_ds'] != run_id_state_round_2['input_ds']
+        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+
+    def test_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
+        """Every single node should be run"""
+
+        reset_counter()
+
+        catalog = DataCatalog({
+            "m1": MemoryDataSet(data="42"),
+            "m2": MemoryDataSet(),
+            "output_ds": txt_output_data_set
+        })
+
+        pipeline = Pipeline([
+            node(indentity_with_side_effect, "m1", "m2", name="node1"),
+            node(indentity_with_side_effect, "m2", "output_ds", name="node2")
+        ])
+
+        runner = ForcedIdempotentSequentialRunner()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
+
+        runner.run(pipeline, catalog)
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
+
+        assert output_mds_node_run_count == 4
+        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+
+
 class TestSeqentialRunnerMutipleRun:
 
     def test_output_mds(self):
+        reset_counter()
         input_data = 24
 
         pipeline = Pipeline([
@@ -368,7 +435,7 @@ def unfinished_outputs_pipeline():
 
 class TestSeqentialRunnerBranchedPipeline:
     def test_input_seq(
-        self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
     ):
         memory_catalog.add_feed_dict(pandas_df_feed_dict, replace=True)
         outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
@@ -382,7 +449,7 @@ class TestSeqentialRunnerBranchedPipeline:
         assert isinstance(outputs["ds6"], pd.DataFrame)
 
     def test_conflict_feed_catalog(
-        self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
+            self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
     ):
         """ds1 and ds3 will be replaced with new inputs."""
         memory_catalog.add_feed_dict(conflicting_feed_dict, replace=True)
