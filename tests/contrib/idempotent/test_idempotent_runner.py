@@ -154,7 +154,7 @@ def indentity_with_side_effect(arg):
     return arg
 
 
-class TestTestSeqentialRunnerMutipleRun:
+class TestSeqentialRunnerMutipleRun:
 
     def test_output_mds(self):
         input_data = 24
