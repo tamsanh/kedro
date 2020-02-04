@@ -211,17 +211,17 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round1 = runner.state_storage.run_id_state.copy()
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round2 = runner.state_storage.run_id_state.copy()
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
-        assert run_id_state_round1['memory'] != run_id_state_round2['memory']
+        assert run_id_state_round_1['memory'] != run_id_state_round_2['memory']
         # node2's input has changed, will be run
-        assert run_id_state_round1['input_ds'] != run_id_state_round2['input_ds']
+        assert run_id_state_round_1['input_ds'] != run_id_state_round_2['input_ds']
         # node3's input has changed, will be run
-        assert run_id_state_round1['output_ds'] != run_id_state_round2['output_ds']
+        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
 
     def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
         """Nodes with no MemoryDataset as outputs, and has no changes in inputs, should not be run"""
@@ -242,20 +242,20 @@ class TestTestSeqentialRunnerMutipleRun:
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        run_id_state_round1 = runner.state_storage.run_id_state.copy()
+        run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        run_id_state_round2 = runner.state_storage.run_id_state.copy()
+        run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # assert Path(output_filepath_txt).read_text("utf-8") == input_data
 
-        assert run_id_state_round1['memory'] == run_id_state_round2['memory']
+        assert run_id_state_round_1['memory'] == run_id_state_round_2['memory']
         # node1 won't be run
-        assert run_id_state_round1['input_ds'] == run_id_state_round2['input_ds']
+        assert run_id_state_round_1['input_ds'] == run_id_state_round_2['input_ds']
         # node2 won't be run
-        assert run_id_state_round1['output_ds'] == run_id_state_round2['output_ds']
+        assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
 
-    def test_with_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
+    def test_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
         """
         Node with MemoryDataSet input should not be run
         as long as the input has not changed.
@@ -286,7 +286,7 @@ class TestTestSeqentialRunnerMutipleRun:
         # node2 will not be run
         assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
 
-    def test_with_mds_change(self, txt_output_data_set):
+    def test_mds_change(self, txt_output_data_set):
         """Node with a changed MemoryDataSet input should be run."""
         catalog = DataCatalog({
             "m1": MemoryDataSet(),
