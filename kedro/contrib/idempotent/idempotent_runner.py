@@ -67,29 +67,28 @@ def run_node_idempotently(
 
     """
 
-    if not force_run:
-        # Find all inputs that are parameters
-        parameter_inputs = [i for i in node.inputs if i.startswith("params:")]
-        # Hash them as the key after loading
-        for parameter_input in parameter_inputs:
-            # Update our idempotency state with new hashes
-            state.update_run_id(
-                parameter_input, get_hash_value(catalog.load(parameter_input))
-            )
-
-        # Find all output that are MemoryDataSet
-        memory_outputs = [
-            o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet
-        ]
-
-        # Judge if the node should be run
-        inputs_have_changed = state.node_inputs_have_changed(node.name, node.inputs)
-        has_been_run = state.node_has_been_run(node.name)
-        should_run_node = (
-            not has_been_run or inputs_have_changed or len(memory_outputs) > 0
+    # Find all inputs that are parameters
+    parameter_inputs = [i for i in node.inputs if i.startswith("params:")]
+    # Hash them as the key after loading
+    for parameter_input in parameter_inputs:
+        # Update our idempotency state with new hashes
+        state.update_run_id(
+            parameter_input, get_hash_value(catalog.load(parameter_input))
         )
-        if not should_run_node:
-            return node
+
+    # Find all output that are MemoryDataSet
+    memory_outputs = [
+        o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet
+    ]
+
+    # Judge if the node should be run
+    inputs_have_changed = state.node_inputs_have_changed(node.name, node.inputs)
+    has_been_run = state.node_has_been_run(node.name)
+    should_run_node = (
+        not has_been_run or inputs_have_changed or len(memory_outputs) > 0 or force_run
+    )
+    if not should_run_node:
+        return node
 
     inputs = {name: catalog.load(name) for name in node.inputs}
     outputs = node.run(inputs)
