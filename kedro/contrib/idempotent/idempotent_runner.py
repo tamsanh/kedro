@@ -29,8 +29,6 @@
 used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
-import json
-import pandas as pd
 from collections import Counter
 from itertools import chain
 
@@ -39,16 +37,6 @@ from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.runner.runner import AbstractRunner
-
-
-def get_hash_value(data):
-    hash_value = str(hash(json.dumps(data, sort_keys=True, default=str)))
-    if type(data) == pd.DataFrame:
-        try:
-            hash_value = pd.util.hash_pandas_object(data, index=True).sum()
-        except TypeError:
-            pass
-    return hash_value
 
 
 def run_node_idempotently(
@@ -73,7 +61,7 @@ def run_node_idempotently(
     for parameter_input in parameter_inputs:
         # Update our idempotency state with new hashes
         state.update_run_id(
-            parameter_input, get_hash_value(catalog.load(parameter_input))
+            parameter_input, catalog.load(parameter_input)
         )
 
     # Find all output that are MemoryDataSet
@@ -94,10 +82,7 @@ def run_node_idempotently(
     outputs = node.run(inputs)
     for name, data in outputs.items():
         catalog.save(name, data)
-        run_id = None
-        if type(catalog._data_sets[name]) == MemoryDataSet:
-            run_id = get_hash_value(data)
-        state.update_run_id(name, run_id)
+        state.update_run_id(name, data, type(catalog._data_sets[name]))
     for name in node.confirms:
         catalog.confirm(name)
 

@@ -1,5 +1,9 @@
+import json
+import pandas as pd
 from uuid import uuid4
-from typing import List
+from typing import List, Any
+
+from kedro.io.data_catalog import MemoryDataSet
 
 
 class IdempotentStateStorage:
@@ -25,13 +29,27 @@ class IdempotentStateStorage:
         self.nodes_have_been_run = nodes_have_been_run
 
     @staticmethod
-    def generate_run_id():
-        return str(uuid4())
+    def generate_run_id(data_name: str = None, data: Any = None, data_set_type: Any = None):
+        run_id = str(uuid4())
+        if data_name is None:
+            return run_id
+        if data_name.startswith("params:") or data_set_type is MemoryDataSet:
+            return IdempotentStateStorage.get_hash_value(data)
+        return run_id
 
-    def update_run_id(self, node: str, run_id: str = None):
-        if run_id is None:
-            run_id = IdempotentStateStorage.generate_run_id()
-        self.run_id_state[node] = run_id
+    @staticmethod
+    def get_hash_value(data):
+        hash_value = str(hash(json.dumps(data, sort_keys=True, default=str)))
+        if type(data) == pd.DataFrame:
+            try:
+                hash_value = pd.util.hash_pandas_object(data, index=True).sum()
+            except TypeError:
+                pass
+        return hash_value
+
+    def update_run_id(self, data_name: str, data: Any = None, data_set_type: Any = None):
+        run_id = IdempotentStateStorage.generate_run_id(data_name, data, data_set_type)
+        self.run_id_state[data_name] = run_id
 
     def update_inputs(self, node: str, inputs: List[str]):
         self.input_state[node] = {

@@ -44,8 +44,7 @@ from kedro.io import (
 from kedro.pipeline import Pipeline, node
 from kedro.contrib.idempotent.idempotent_runner import (
     IdempotentSequentialRunner,
-    ForcedIdempotentSequentialRunner,
-    get_hash_value,
+    ForcedIdempotentSequentialRunner
 )
 
 
@@ -157,52 +156,6 @@ def create_stateful_identity():
         return arg
 
     return state, _stateful_identity
-
-
-@pytest.fixture(scope="class")
-def dict_data():
-    dict_1 = {"a": [1.11, 2.22], "b": {"c": datetime.now()}, "d": "hello"}
-    dict_2 = dict_1.copy()
-    dict_2["d"] = "world"
-    return {"1": dict_1, "2": dict_2}
-
-
-@pytest.fixture(scope="class")
-def list_data():
-    list_1 = [1.11, datetime.now(), "hello", {"a": datetime.date(datetime.now())}]
-
-    list_2 = list_1.copy()
-    list_2.append("1")
-    return {"1": list_1, "2": list_2}
-
-
-class TestGetHashValue:
-    def test_dict(self, dict_data):
-        assert get_hash_value(dict_data["1"]) == get_hash_value(dict_data["1"])
-        assert get_hash_value(dict_data["2"]) == get_hash_value(dict_data["2"])
-        assert get_hash_value(dict_data["1"]) != get_hash_value(dict_data["2"])
-
-    def test_list(self, list_data):
-        assert get_hash_value(list_data["1"]) == get_hash_value(list_data["1"])
-        assert get_hash_value(list_data["2"]) == get_hash_value(list_data["2"])
-        assert get_hash_value(list_data["1"]) != get_hash_value(list_data["2"])
-
-    def test_df(self, dict_data, list_data):
-        df_1 = pd.DataFrame(
-            {
-                "dict": [dict_data["1"], dict_data["2"]],
-                "list": [list_data["1"], list_data["2"]],
-                "dates": [datetime.now(), datetime.date(datetime.now())],
-            }
-        )
-
-        df_2 = pd.DataFrame(
-            {"int": [1, 2, 3], "float": [1.1, 2.2, 3.3], "string": ["aa", "bb", "cc"]}
-        )
-
-        assert get_hash_value(df_1) == get_hash_value(df_1)
-        assert get_hash_value(df_2) == get_hash_value(df_2)
-        assert get_hash_value(df_1) != get_hash_value(df_2)
 
 
 class TestForcedSeqentialRunner:
