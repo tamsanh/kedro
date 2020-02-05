@@ -3,7 +3,6 @@ from typing import List
 
 
 class IdempotentStateStorage:
-
     def __init__(self, run_id_state=None, input_state=None, nodes_have_been_run=None):
         if run_id_state is None:
             run_id_state = {
@@ -36,8 +35,7 @@ class IdempotentStateStorage:
 
     def update_inputs(self, node: str, inputs: List[str]):
         self.input_state[node] = {
-            target_input: self.retrieve_run_id(target_input)
-            for target_input in inputs
+            target_input: self.retrieve_run_id(target_input) for target_input in inputs
         }
 
     def update_node_run_status(self, node: str):
@@ -66,9 +64,8 @@ class IdempotentStateStorage:
 
         expected_run_ids = set(expect_input_items.values())
 
-        actual_run_ids = set([
-            self.retrieve_run_id(input_node)
-            for input_node in inputs
-        ])
+        actual_run_ids = set(
+            [self.retrieve_run_id(input_node) for input_node in inputs]
+        )
 
         return actual_run_ids != expected_run_ids

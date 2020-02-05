@@ -46,12 +46,14 @@ def get_hash_value(data):
     if type(data) == pd.DataFrame:
         try:
             hash_value = pd.util.hash_pandas_object(data, index=True).sum()
-        except:
+        except TypeError:
             pass
     return hash_value
 
 
-def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool) -> Node:
+def run_node_idempotently(
+    node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool
+) -> Node:
     """Run a single `Node` with inputs from and outputs to the `catalog`.
 
     Args:
@@ -71,18 +73,21 @@ def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentSta
         # Hash them as the key after loading
         for parameter_input in parameter_inputs:
             # Update our idempotency state with new hashes
-            state.update_run_id(parameter_input, get_hash_value(catalog.load(parameter_input)))
+            state.update_run_id(
+                parameter_input, get_hash_value(catalog.load(parameter_input))
+            )
 
         # Find all output that are MemoryDataSet
-        memory_outputs = [o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet]
+        memory_outputs = [
+            o for o in node.outputs if type(catalog._data_sets[o]) == MemoryDataSet
+        ]
 
         # Judge if the node should be run
-        inputs_have_changed = state.node_inputs_have_changed(
-            node.name,
-            node.inputs
-        )
+        inputs_have_changed = state.node_inputs_have_changed(node.name, node.inputs)
         has_been_run = state.node_has_been_run(node.name)
-        should_run_node = not has_been_run or inputs_have_changed or len(memory_outputs) > 0
+        should_run_node = (
+            not has_been_run or inputs_have_changed or len(memory_outputs) > 0
+        )
         if not should_run_node:
             return node
 

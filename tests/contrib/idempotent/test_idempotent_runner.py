@@ -39,11 +39,14 @@ from kedro.io import (
     DataSetError,
     LambdaDataSet,
     MemoryDataSet,
-    TextLocalDataSet
+    TextLocalDataSet,
 )
 from kedro.pipeline import Pipeline, node
-from kedro.contrib.idempotent.idempotent_runner import IdempotentSequentialRunner, ForcedIdempotentSequentialRunner, \
-    get_hash_value
+from kedro.contrib.idempotent.idempotent_runner import (
+    IdempotentSequentialRunner,
+    ForcedIdempotentSequentialRunner,
+    get_hash_value,
+)
 
 
 @pytest.fixture
@@ -147,10 +150,10 @@ def txt_output_data_set(output_filepath_txt, request):
 
 
 def create_stateful_identity():
-    state = {'runs': 0}
+    state = {"runs": 0}
 
     def _stateful_identity(arg):
-        state['runs'] = state['runs'] + 1
+        state["runs"] = state["runs"] + 1
         return arg
 
     return state, _stateful_identity
@@ -158,11 +161,7 @@ def create_stateful_identity():
 
 @pytest.fixture(scope="class")
 def dict_data():
-    dict_1 = {
-        "a": [1.11, 2.22],
-        "b": {"c": datetime.now()},
-        "d": "hello"
-    }
+    dict_1 = {"a": [1.11, 2.22], "b": {"c": datetime.now()}, "d": "hello"}
     dict_2 = dict_1.copy()
     dict_2["d"] = "world"
     return {"1": dict_1, "2": dict_2}
@@ -178,29 +177,28 @@ def list_data():
 
 
 class TestGetHashValue:
-
     def test_dict(self, dict_data):
-        assert get_hash_value(dict_data['1']) == get_hash_value(dict_data['1'])
-        assert get_hash_value(dict_data['2']) == get_hash_value(dict_data['2'])
-        assert get_hash_value(dict_data['1']) != get_hash_value(dict_data['2'])
+        assert get_hash_value(dict_data["1"]) == get_hash_value(dict_data["1"])
+        assert get_hash_value(dict_data["2"]) == get_hash_value(dict_data["2"])
+        assert get_hash_value(dict_data["1"]) != get_hash_value(dict_data["2"])
 
     def test_list(self, list_data):
-        assert get_hash_value(list_data['1']) == get_hash_value(list_data['1'])
-        assert get_hash_value(list_data['2']) == get_hash_value(list_data['2'])
-        assert get_hash_value(list_data['1']) != get_hash_value(list_data['2'])
+        assert get_hash_value(list_data["1"]) == get_hash_value(list_data["1"])
+        assert get_hash_value(list_data["2"]) == get_hash_value(list_data["2"])
+        assert get_hash_value(list_data["1"]) != get_hash_value(list_data["2"])
 
     def test_df(self, dict_data, list_data):
-        df_1 = pd.DataFrame({
-            "dict": [dict_data['1'], dict_data['2']],
-            "list": [list_data['1'], list_data['2']],
-            "dates": [datetime.now(), datetime.date(datetime.now())]
-        })
+        df_1 = pd.DataFrame(
+            {
+                "dict": [dict_data["1"], dict_data["2"]],
+                "list": [list_data["1"], list_data["2"]],
+                "dates": [datetime.now(), datetime.date(datetime.now())],
+            }
+        )
 
-        df_2 = pd.DataFrame({
-            "int": [1, 2, 3],
-            "float": [1.1, 2.2, 3.3],
-            "string": ["aa", "bb", "cc"]
-        })
+        df_2 = pd.DataFrame(
+            {"int": [1, 2, 3], "float": [1.1, 2.2, 3.3], "string": ["aa", "bb", "cc"]}
+        )
 
         assert get_hash_value(df_1) == get_hash_value(df_1)
         assert get_hash_value(df_2) == get_hash_value(df_2)
@@ -208,22 +206,27 @@ class TestGetHashValue:
 
 
 class TestForcedSeqentialRunner:
-
-    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
+    def test_no_input_change(
+        self, txt_input_data_set, txt_output_data_set, output_filepath_txt
+    ):
         """Every single node should be run"""
 
-        catalog = DataCatalog({
-            "memory": MemoryDataSet(data="24"),
-            "input_ds": txt_input_data_set,
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                "memory": MemoryDataSet(data="24"),
+                "input_ds": txt_input_data_set,
+                "output_ds": txt_output_data_set,
+            }
+        )
 
         state, indentity_with_side_effect = create_stateful_identity()
 
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "memory", "input_ds", name="node1"),
-            node(indentity_with_side_effect, "input_ds", "output_ds", name="node2")
-        ])
+        pipeline = Pipeline(
+            [
+                node(indentity_with_side_effect, "memory", "input_ds", name="node1"),
+                node(indentity_with_side_effect, "input_ds", "output_ds", name="node2"),
+            ]
+        )
 
         runner = ForcedIdempotentSequentialRunner()
 
@@ -233,27 +236,31 @@ class TestForcedSeqentialRunner:
         runner.run(pipeline, catalog)
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
-        assert state['runs'] == 4
+        assert state["runs"] == 4
 
-        assert run_id_state_round_1['memory'] == run_id_state_round_2['memory']
-        assert run_id_state_round_1['input_ds'] != run_id_state_round_2['input_ds']
-        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+        assert run_id_state_round_1["memory"] == run_id_state_round_2["memory"]
+        assert run_id_state_round_1["input_ds"] != run_id_state_round_2["input_ds"]
+        assert run_id_state_round_1["output_ds"] != run_id_state_round_2["output_ds"]
 
     def test_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
         """Every single node should be run"""
 
         state, indentity_with_side_effect = create_stateful_identity()
 
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data="42"),
-            "m2": MemoryDataSet(),
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                "m1": MemoryDataSet(data="42"),
+                "m2": MemoryDataSet(),
+                "output_ds": txt_output_data_set,
+            }
+        )
 
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2", name="node1"),
-            node(indentity_with_side_effect, "m2", "output_ds", name="node2")
-        ])
+        pipeline = Pipeline(
+            [
+                node(indentity_with_side_effect, "m1", "m2", name="node1"),
+                node(indentity_with_side_effect, "m2", "output_ds", name="node2"),
+            ]
+        )
 
         runner = ForcedIdempotentSequentialRunner()
 
@@ -263,9 +270,9 @@ class TestForcedSeqentialRunner:
         runner.run(pipeline, catalog)
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
-        assert state['runs'] == 4
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
-        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+        assert state["runs"] == 4
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
+        assert run_id_state_round_1["output_ds"] != run_id_state_round_2["output_ds"]
 
 
 class TestSeqentialRunnerHashingValue:
@@ -273,129 +280,120 @@ class TestSeqentialRunnerHashingValue:
         input_data = {
             "today": datetime.date(datetime.now()),
             "str": "hello",
-            "list": [1.11, "world", {"hello world": datetime.now()}]
+            "list": [1.11, "world", {"hello world": datetime.now()}],
         }
 
         state, indentity_with_side_effect = create_stateful_identity()
 
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2")
-        ])
+        pipeline = Pipeline([node(indentity_with_side_effect, "m1", "m2")])
 
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data=input_data),
-            "m2": MemoryDataSet()
-        })
+        catalog = DataCatalog(
+            {"m1": MemoryDataSet(data=input_data), "m2": MemoryDataSet()}
+        )
 
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        count_round_1 = state['runs']
+        count_round_1 = state["runs"]
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        count_round_2 = state['runs']
+        count_round_2 = state["runs"]
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
         assert count_round_2 == 2
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
-        assert catalog.load('m2') == input_data
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
+        assert catalog.load("m2") == input_data
 
     def test_date_object_in_list(self):
         state, indentity_with_side_effect = create_stateful_identity()
 
         input_data = [
-            "hello", 123.456, 4,
+            "hello",
+            123.456,
+            4,
             datetime.date(datetime.now()),
-            ["world", {"hello world": datetime.now()}]
+            ["world", {"hello world": datetime.now()}],
         ]
 
-        pipline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2")
-        ])
+        pipline = Pipeline([node(indentity_with_side_effect, "m1", "m2")])
 
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data=input_data),
-            "m2": MemoryDataSet()
-        })
+        catalog = DataCatalog(
+            {"m1": MemoryDataSet(data=input_data), "m2": MemoryDataSet()}
+        )
 
         runner = IdempotentSequentialRunner()
 
         runner.run(pipline, catalog)
-        count_round_1 = state['runs']
+        count_round_1 = state["runs"]
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipline, catalog)
-        count_round_2 = state['runs']
+        count_round_2 = state["runs"]
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
         assert count_round_2 == 2
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
-        assert catalog.load('m2') == input_data
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
+        assert catalog.load("m2") == input_data
 
     def test_date_object_in_df(self):
         state, indentity_with_side_effect = create_stateful_identity()
 
-        input_data = pd.DataFrame({
-            "hello": [123.456, 4],
-            "date": [datetime.date(datetime.now()), datetime.now()],
-            "list": [[1, 2], [3, 4]]
-        })
+        input_data = pd.DataFrame(
+            {
+                "hello": [123.456, 4],
+                "date": [datetime.date(datetime.now()), datetime.now()],
+                "list": [[1, 2], [3, 4]],
+            }
+        )
 
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2")
-        ])
+        pipeline = Pipeline([node(indentity_with_side_effect, "m1", "m2")])
 
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data=input_data),
-            "m2": MemoryDataSet()
-        })
+        catalog = DataCatalog(
+            {"m1": MemoryDataSet(data=input_data), "m2": MemoryDataSet()}
+        )
 
         runner = IdempotentSequentialRunner()
 
         runner.run(pipeline, catalog)
-        count_round_1 = state['runs']
+        count_round_1 = state["runs"]
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        count_round_2 = state['runs']
+        count_round_2 = state["runs"]
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 == 1
         assert count_round_2 == 2
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
-        assert catalog.load('m2').shape == input_data.shape
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
+        assert catalog.load("m2").shape == input_data.shape
 
 
 class TestSeqentialRunnerMutipleRun:
-
     def test_output_mds(self):
         input_data = 24
 
         state, indentity_with_side_effect = create_stateful_identity()
 
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data=input_data),
-            "m2": MemoryDataSet()
-        })
+        catalog = DataCatalog(
+            {"m1": MemoryDataSet(data=input_data), "m2": MemoryDataSet()}
+        )
 
-        pipeline = Pipeline([
-            node(indentity_with_side_effect, "m1", "m2")
-        ])
+        pipeline = Pipeline([node(indentity_with_side_effect, "m1", "m2")])
 
         runner = IdempotentSequentialRunner()
         runner.run(pipeline, catalog)
-        count_round_1 = state['runs']
+        count_round_1 = state["runs"]
         run_id_state_round_1 = runner.state_storage.run_id_state.copy()
 
         runner.run(pipeline, catalog)
-        count_round_2 = state['runs']
+        count_round_2 = state["runs"]
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         assert count_round_1 != count_round_2
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
 
     def test_changed_mds_output(self, branchless_no_input_pipeline):
         """If a node output as least 1 MemoryDataSet, it will be run regardless of updates from its inputs"""
@@ -408,22 +406,23 @@ class TestSeqentialRunnerMutipleRun:
         runner.run(branchless_no_input_pipeline, DataCatalog())
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
-        for dms_input in ['A', 'B', 'C', 'D', 'E']:
+        for dms_input in ["A", "B", "C", "D", "E"]:
             assert run_id_state_round_1[dms_input] != run_id_state_round_2[dms_input]
 
     def test_input_change(self, txt_input_data_set, txt_output_data_set):
         """Nodes with no MemoryDataset as outputs, but has changes in inputs, should be run."""
 
-        catalog = DataCatalog({
-            "input_ds": txt_input_data_set,
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {"input_ds": txt_input_data_set, "output_ds": txt_output_data_set}
+        )
 
-        pipeline = Pipeline([
-            node(random_str, None, "memory", name="node1"),
-            node(identity, "memory", "input_ds", name="node2"),
-            node(identity, "input_ds", "output_ds", name="node3")
-        ])
+        pipeline = Pipeline(
+            [
+                node(random_str, None, "memory", name="node1"),
+                node(identity, "memory", "input_ds", name="node2"),
+                node(identity, "input_ds", "output_ds", name="node3"),
+            ]
+        )
 
         runner = IdempotentSequentialRunner()
 
@@ -434,27 +433,33 @@ class TestSeqentialRunnerMutipleRun:
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
-        assert run_id_state_round_1['memory'] != run_id_state_round_2['memory']
+        assert run_id_state_round_1["memory"] != run_id_state_round_2["memory"]
         # node2's input has changed, will be run
-        assert run_id_state_round_1['input_ds'] != run_id_state_round_2['input_ds']
+        assert run_id_state_round_1["input_ds"] != run_id_state_round_2["input_ds"]
         # node3's input has changed, will be run
-        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+        assert run_id_state_round_1["output_ds"] != run_id_state_round_2["output_ds"]
 
-    def test_no_input_change(self, txt_input_data_set, txt_output_data_set, output_filepath_txt):
+    def test_no_input_change(
+        self, txt_input_data_set, txt_output_data_set, output_filepath_txt
+    ):
         """Nodes with no MemoryDataset as outputs, and has no changes in inputs, should not be run"""
 
         input_data = "24"
 
-        catalog = DataCatalog({
-            "memory": MemoryDataSet(data=input_data),
-            "input_ds": txt_input_data_set,
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                "memory": MemoryDataSet(data=input_data),
+                "input_ds": txt_input_data_set,
+                "output_ds": txt_output_data_set,
+            }
+        )
 
-        pipeline = Pipeline([
-            node(identity, "memory", "input_ds", name="node1"),
-            node(identity, "input_ds", "output_ds", name="node2")
-        ])
+        pipeline = Pipeline(
+            [
+                node(identity, "memory", "input_ds", name="node1"),
+                node(identity, "input_ds", "output_ds", name="node2"),
+            ]
+        )
 
         runner = IdempotentSequentialRunner()
 
@@ -466,11 +471,11 @@ class TestSeqentialRunnerMutipleRun:
 
         # assert Path(output_filepath_txt).read_text("utf-8") == input_data
 
-        assert run_id_state_round_1['memory'] == run_id_state_round_2['memory']
+        assert run_id_state_round_1["memory"] == run_id_state_round_2["memory"]
         # node1 won't be run
-        assert run_id_state_round_1['input_ds'] == run_id_state_round_2['input_ds']
+        assert run_id_state_round_1["input_ds"] == run_id_state_round_2["input_ds"]
         # node2 won't be run
-        assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
+        assert run_id_state_round_1["output_ds"] == run_id_state_round_2["output_ds"]
 
     def test_no_mds_input_change(self, txt_output_data_set, output_filepath_txt):
         """
@@ -479,16 +484,20 @@ class TestSeqentialRunnerMutipleRun:
 
         Node produces that intermediate MemoryDataSet should run.
         """
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(data="42"),
-            "m2": MemoryDataSet(),
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                "m1": MemoryDataSet(data="42"),
+                "m2": MemoryDataSet(),
+                "output_ds": txt_output_data_set,
+            }
+        )
 
-        pipeline = Pipeline([
-            node(identity, "m1", "m2", name="node1"),
-            node(identity, "m2", "output_ds", name="node2")
-        ])
+        pipeline = Pipeline(
+            [
+                node(identity, "m1", "m2", name="node1"),
+                node(identity, "m2", "output_ds", name="node2"),
+            ]
+        )
 
         runner = IdempotentSequentialRunner()
 
@@ -499,21 +508,20 @@ class TestSeqentialRunnerMutipleRun:
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, will be run
-        assert run_id_state_round_1['m2'] == run_id_state_round_2['m2']
+        assert run_id_state_round_1["m2"] == run_id_state_round_2["m2"]
         # node2 will not be run
-        assert run_id_state_round_1['output_ds'] == run_id_state_round_2['output_ds']
+        assert run_id_state_round_1["output_ds"] == run_id_state_round_2["output_ds"]
 
     def test_mds_change(self, txt_output_data_set):
         """Node with a changed MemoryDataSet input should be run."""
-        catalog = DataCatalog({
-            "m1": MemoryDataSet(),
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog({"m1": MemoryDataSet(), "output_ds": txt_output_data_set})
 
-        pipeline = Pipeline([
-            node(random_str, None, "m1", name="node1"),
-            node(identity, "m1", "output_ds", name="node2")
-        ])
+        pipeline = Pipeline(
+            [
+                node(random_str, None, "m1", name="node1"),
+                node(identity, "m1", "output_ds", name="node2"),
+            ]
+        )
 
         runner = IdempotentSequentialRunner()
 
@@ -524,14 +532,16 @@ class TestSeqentialRunnerMutipleRun:
         run_id_state_round_2 = runner.state_storage.run_id_state.copy()
 
         # node1 outputs MemoryDataSet, also its input has changed, will be run
-        assert run_id_state_round_1['m1'] != run_id_state_round_2['m1']
+        assert run_id_state_round_1["m1"] != run_id_state_round_2["m1"]
         # node2's input has changed, will be run
-        assert run_id_state_round_1['output_ds'] != run_id_state_round_2['output_ds']
+        assert run_id_state_round_1["output_ds"] != run_id_state_round_2["output_ds"]
 
 
 class TestSeqentialRunnerBranchlessPipeline:
     def test_no_input_seq(self, branchless_no_input_pipeline):
-        outputs = IdempotentSequentialRunner().run(branchless_no_input_pipeline, DataCatalog())
+        outputs = IdempotentSequentialRunner().run(
+            branchless_no_input_pipeline, DataCatalog()
+        )
         assert "E" in outputs
         assert len(outputs) == 1
 
@@ -585,10 +595,12 @@ def unfinished_outputs_pipeline():
 
 class TestSeqentialRunnerBranchedPipeline:
     def test_input_seq(
-            self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
+        self, memory_catalog, unfinished_outputs_pipeline, pandas_df_feed_dict
     ):
         memory_catalog.add_feed_dict(pandas_df_feed_dict, replace=True)
-        outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
+        outputs = IdempotentSequentialRunner().run(
+            unfinished_outputs_pipeline, memory_catalog
+        )
         assert set(outputs.keys()) == {"ds8", "ds5", "ds6"}
         # the pipeline runs ds2->ds5
         assert outputs["ds5"] == [1, 2, 3, 4, 5]
@@ -599,11 +611,13 @@ class TestSeqentialRunnerBranchedPipeline:
         assert isinstance(outputs["ds6"], pd.DataFrame)
 
     def test_conflict_feed_catalog(
-            self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
+        self, memory_catalog, unfinished_outputs_pipeline, conflicting_feed_dict
     ):
         """ds1 and ds3 will be replaced with new inputs."""
         memory_catalog.add_feed_dict(conflicting_feed_dict, replace=True)
-        outputs = IdempotentSequentialRunner().run(unfinished_outputs_pipeline, memory_catalog)
+        outputs = IdempotentSequentialRunner().run(
+            unfinished_outputs_pipeline, memory_catalog
+        )
         assert isinstance(outputs["ds8"], dict)
         assert outputs["ds8"]["data"] == 0
         assert isinstance(outputs["ds6"], pd.DataFrame)
