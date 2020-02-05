@@ -35,28 +35,47 @@ def state_storage_with_update(state_storage_no_update):
     return state
 
 
+@pytest.fixture
+def catalog_without_state_update(state_storage_no_update):
+    return DataCatalog({
+        "idempotent_state_storage": MemoryDataSet(data=state_storage_no_update)
+    })
+
+
+@pytest.fixture
+def catalog_with_state_update(state_storage_with_update):
+    return DataCatalog({
+        "idempotent_state_storage": MemoryDataSet(data=state_storage_with_update)
+    })
+
+
 class TestIdempotentStateStorage:
-    def test_node_inputs_have_not_changed(self, state_storage_no_update):
-        storage = IdempotentStateStorage(**state_storage_no_update)
+    def test_node_inputs_have_not_changed(self, catalog_without_state_update):
+        storage = IdempotentStateStorage(catalog_without_state_update)
         assert not storage.node_inputs_have_changed("node3", ["node2", "node1"])
 
-    def test_node_inputs_changed_with_input_removement(self, state_storage_no_update):
-        storage = IdempotentStateStorage(**state_storage_no_update)
+    def test_node_inputs_changed_with_input_removement(self, catalog_without_state_update):
+        storage = IdempotentStateStorage(catalog_without_state_update)
         assert storage.node_inputs_have_changed("node3", ["node2"])
 
-    def test_node_inputs_run_id_changed(self, state_storage_with_update):
-        storage = IdempotentStateStorage(**state_storage_with_update)
+    def test_node_inputs_run_id_changed(self, catalog_with_state_update):
+        storage = IdempotentStateStorage(catalog_with_state_update)
         assert storage.node_inputs_have_changed("node3", ["node2", "node1"])
 
-    def test_update_run_id_for_node(self, state_storage_no_update):
+    def test_update_run_id(self, catalog_without_state_update, state_storage_no_update):
+        storage = IdempotentStateStorage(catalog_without_state_update)
+        storage.update_run_id("node1")
+        assert storage.run_id_state["node1"] != state_storage_no_update['run_id_state']['node1']
+
+    def test_update_run_id_with_data(self, catalog_without_state_update):
         new_data = 1
-        storage = IdempotentStateStorage(**state_storage_no_update)
+        storage = IdempotentStateStorage(catalog_without_state_update)
         storage.update_run_id("node1", new_data)
         assert storage.run_id_state['node1'] == IdempotentStateStorage.generate_run_id(new_data)
         assert storage.node_inputs_have_changed("node3", ["node2", "node1"])
 
-    def test_update_key(self, state_storage_with_update):
-        storage = IdempotentStateStorage(**state_storage_with_update)
+    def test_update_key(self, catalog_with_state_update):
+        storage = IdempotentStateStorage(catalog_with_state_update)
         storage.update_inputs("node3", ["node2", "node1"])
         assert not storage.node_inputs_have_changed("node3", ["node2", "node1"])
 

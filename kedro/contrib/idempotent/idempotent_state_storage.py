@@ -3,33 +3,56 @@ import pandas as pd
 from uuid import uuid4
 from typing import List, Any
 
-from kedro.io.data_catalog import MemoryDataSet
+from kedro.io.data_catalog import MemoryDataSet, DataCatalog
+
+IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = 'idempotent_state_storage'
 
 
 class IdempotentStateStorage:
-    def __init__(self, run_id_state=None, input_state=None, nodes_have_been_run=None):
-        if run_id_state is None:
-            run_id_state = {
-                # "ds1": "qwer-qwer-wqer",
-                # "ds2": "adsf-asdf-adsf"
-            }
-        if input_state is None:
-            input_state = {
-                # "node1": {},
-                # "node2": {
-                #     "ds1": "qwer-qwer-qwer"
-            }
-        if nodes_have_been_run is None:
-            nodes_have_been_run = {
-                # "node1": True
-            }
+    def __init__(self, catalog: DataCatalog, state_catalog_entry: str = None):
+        self.catalog = catalog
+        if state_catalog_entry is None:
+            state_catalog_entry = IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
+        self.state_catalog_entry = state_catalog_entry
+
+        try:
+            state_data = catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)
+        except Exception as e:
+            print(
+                "Failed to load data for DataCatalog({}) \n".format(self.state_catalog_entry),
+                "Error is: \n{}".format(str(e)),
+            )
+            return
+
+        assert type(state_data) is dict
+
+        run_id_state = state_data.get('run_id_state', {
+            # "ds1": "qwer-qwer-wqer",
+            # "ds2": "adsf-asdf-adsf"
+        })
+        input_state = state_data.get('input_state', {
+            # "node1": {},
+            # "node2": {
+            #     "ds1": "qwer-qwer-qwer"
+        })
+        nodes_have_been_run = state_data.get('nodes_have_been_run', {
+            # "node1": True
+        })
 
         self.run_id_state = run_id_state
         self.input_state = input_state
         self.nodes_have_been_run = nodes_have_been_run
 
+    def __del__(self):
+        state = {
+            'run_id_state': self.run_id_state,
+            'input_state': self.input_state,
+            'nodes_have_been_run': self.nodes_have_been_run
+        }
+        self.catalog.save(self.state_catalog_entry, state)
+
     @staticmethod
-    def generate_run_id(data):
+    def generate_run_id(data: Any = None):
         if data is None:
             return str(uuid4())
         else:
