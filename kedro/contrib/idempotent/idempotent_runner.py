@@ -82,7 +82,10 @@ def run_node_idempotently(
     outputs = node.run(inputs)
     for name, data in outputs.items():
         catalog.save(name, data)
-        state.update_run_id(name, data, type(catalog._data_sets[name]))
+        if type(catalog._data_sets[name]) is MemoryDataSet:
+            state.update_run_id(name, data)
+        else:
+            state.update_run_id(name)
     for name in node.confirms:
         catalog.confirm(name)
 

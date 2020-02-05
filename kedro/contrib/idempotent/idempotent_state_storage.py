@@ -29,13 +29,11 @@ class IdempotentStateStorage:
         self.nodes_have_been_run = nodes_have_been_run
 
     @staticmethod
-    def generate_run_id(data_name: str = None, data: Any = None, data_set_type: Any = None):
-        run_id = str(uuid4())
-        if data_name is None:
-            return run_id
-        if data_name.startswith("params:") or data_set_type is MemoryDataSet:
+    def generate_run_id(data):
+        if data is None:
+            return str(uuid4())
+        else:
             return IdempotentStateStorage.get_hash_value(data)
-        return run_id
 
     @staticmethod
     def get_hash_value(data):
@@ -47,9 +45,9 @@ class IdempotentStateStorage:
                 pass
         return hash_value
 
-    def update_run_id(self, data_name: str, data: Any = None, data_set_type: Any = None):
-        run_id = IdempotentStateStorage.generate_run_id(data_name, data, data_set_type)
-        self.run_id_state[data_name] = run_id
+    def update_run_id(self, data_set: str, data: Any = None):
+        run_id = IdempotentStateStorage.generate_run_id(data)
+        self.run_id_state[data_set] = run_id
 
     def update_inputs(self, node: str, inputs: List[str]):
         self.input_state[node] = {

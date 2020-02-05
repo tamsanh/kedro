@@ -4,6 +4,7 @@ from uuid import uuid4
 from datetime import datetime
 
 from kedro.contrib.idempotent.idempotent_state_storage import IdempotentStateStorage
+from kedro.io.data_catalog import DataCatalog, MemoryDataSet
 
 
 @pytest.fixture
@@ -48,11 +49,10 @@ class TestIdempotentStateStorage:
         assert storage.node_inputs_have_changed("node3", ["node2", "node1"])
 
     def test_update_run_id_for_node(self, state_storage_no_update):
-        new_run_id = str(uuid4())
+        new_data = 1
         storage = IdempotentStateStorage(**state_storage_no_update)
-        storage.update_run_id("node1", new_run_id)
-
-        assert storage.run_id_state["node1"] == new_run_id
+        storage.update_run_id("node1", new_data)
+        assert storage.run_id_state['node1'] == IdempotentStateStorage.generate_run_id(new_data)
         assert storage.node_inputs_have_changed("node3", ["node2", "node1"])
 
     def test_update_key(self, state_storage_with_update):
