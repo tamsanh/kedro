@@ -1,4 +1,5 @@
 import json
+import hashlib
 import pandas as pd
 from uuid import uuid4
 from typing import List, Any
@@ -70,7 +71,11 @@ class IdempotentStateStorage:
 
     @staticmethod
     def get_hash_value(data):
-        hash_value = str(hash(json.dumps(data, sort_keys=True, default=str)))
+        data_str = json.dumps(data, sort_keys=True, default=str)
+        md5 = hashlib.md5()
+        md5.update(data_str.encode('utf-8'))
+        hash_value = md5.hexdigest()
+
         if type(data) == pd.DataFrame:
             try:
                 hash_value = pd.util.hash_pandas_object(data, index=True).sum()
