@@ -44,20 +44,24 @@ from kedro.io import (
 from kedro.pipeline import Pipeline, node
 from kedro.contrib.idempotent.idempotent_runner import (
     IdempotentSequentialRunner,
-    ForcedIdempotentSequentialRunner
+    ForcedIdempotentSequentialRunner,
 )
-from kedro.contrib.idempotent.idempotent_state_storage import IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
+from kedro.contrib.idempotent.idempotent_state_storage import (
+    IDEMPOTENT_STATE_STORAGE_CATALOG_NAME,
+)
 
 
 @pytest.fixture
 def memory_catalog():
     ds1 = MemoryDataSet({"data": 42})
     ds2 = MemoryDataSet([1, 2, 3, 4, 5])
-    return DataCatalog({
-        IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-        "ds1": ds1,
-        "ds2": ds2
-    })
+    return DataCatalog(
+        {
+            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+            "ds1": ds1,
+            "ds2": ds2,
+        }
+    )
 
 
 @pytest.fixture
@@ -164,7 +168,7 @@ def create_stateful_identity():
 
 
 def get_run_id_state(catalog: DataCatalog):
-    return catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)['run_id_state']
+    return catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)["run_id_state"]
 
 
 class TestForcedSeqentialRunner:
@@ -255,7 +259,7 @@ class TestSeqentialRunnerHashingValue:
             {
                 IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
                 "m1": MemoryDataSet(data=input_data),
-                "m2": MemoryDataSet()
+                "m2": MemoryDataSet(),
             }
         )
 
@@ -291,7 +295,7 @@ class TestSeqentialRunnerHashingValue:
             {
                 IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
                 "m1": MemoryDataSet(data=input_data),
-                "m2": MemoryDataSet()
+                "m2": MemoryDataSet(),
             }
         )
 
@@ -327,7 +331,7 @@ class TestSeqentialRunnerHashingValue:
             {
                 IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
                 "m1": MemoryDataSet(data=input_data),
-                "m2": MemoryDataSet()
+                "m2": MemoryDataSet(),
             }
         )
 
@@ -353,11 +357,13 @@ class TestSeqentialRunnerMutipleRun:
 
         state, indentity_with_side_effect = create_stateful_identity()
 
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            "m1": MemoryDataSet(data=input_data),
-            "m2": MemoryDataSet()
-        })
+        catalog = DataCatalog(
+            {
+                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+                "m1": MemoryDataSet(data=input_data),
+                "m2": MemoryDataSet(),
+            }
+        )
 
         pipeline = Pipeline([node(indentity_with_side_effect, "m1", "m2")])
 
@@ -375,9 +381,9 @@ class TestSeqentialRunnerMutipleRun:
 
     def test_changed_mds_output(self, branchless_no_input_pipeline):
         """If a node output as least 1 MemoryDataSet, it will be run regardless of updates from its inputs"""
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-        })
+        catalog = DataCatalog(
+            {IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),}
+        )
 
         runner = IdempotentSequentialRunner()
 
@@ -393,11 +399,13 @@ class TestSeqentialRunnerMutipleRun:
     def test_input_change(self, txt_input_data_set, txt_output_data_set):
         """Nodes with no MemoryDataset as outputs, but has changes in inputs, should be run."""
 
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            "input_ds": txt_input_data_set,
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+                "input_ds": txt_input_data_set,
+                "output_ds": txt_output_data_set,
+            }
+        )
 
         pipeline = Pipeline(
             [
@@ -499,11 +507,13 @@ class TestSeqentialRunnerMutipleRun:
 
     def test_mds_change(self, txt_output_data_set):
         """Node with a changed MemoryDataSet input should be run."""
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            "m1": MemoryDataSet(),
-            "output_ds": txt_output_data_set
-        })
+        catalog = DataCatalog(
+            {
+                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+                "m1": MemoryDataSet(),
+                "output_ds": txt_output_data_set,
+            }
+        )
 
         pipeline = Pipeline(
             [
@@ -529,17 +539,19 @@ class TestSeqentialRunnerMutipleRun:
 class TestSeqentialRunnerBranchlessPipeline:
     def test_no_input_seq(self, branchless_no_input_pipeline):
         outputs = IdempotentSequentialRunner().run(
-            branchless_no_input_pipeline, DataCatalog({
-                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            })
+            branchless_no_input_pipeline,
+            DataCatalog(
+                {IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),}
+            ),
         )
         assert "E" in outputs
         assert len(outputs) == 1
 
     def test_no_data_sets(self, branchless_pipeline):
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-        }, {"ds1": 42})
+        catalog = DataCatalog(
+            {IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),},
+            {"ds1": 42},
+        )
         outputs = IdempotentSequentialRunner().run(branchless_pipeline, catalog)
         assert "ds3" in outputs
         assert outputs["ds3"] == 42
@@ -552,9 +564,12 @@ class TestSeqentialRunnerBranchlessPipeline:
     def test_node_returning_none(self, saving_none_pipeline):
         pattern = "Saving `None` to a `DataSet` is not allowed"
         with pytest.raises(DataSetError, match=pattern):
-            IdempotentSequentialRunner().run(saving_none_pipeline, DataCatalog({
-                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={})
-            }))
+            IdempotentSequentialRunner().run(
+                saving_none_pipeline,
+                DataCatalog(
+                    {IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={})}
+                ),
+            )
 
     def test_result_saved_not_returned(self, saving_result_pipeline):
         """The pipeline runs ds->dsX but save does not save the output."""
@@ -621,9 +636,12 @@ class TestSeqentialRunnerBranchedPipeline:
     def test_unsatisfied_inputs(self, unfinished_outputs_pipeline):
         """ds1, ds2 and ds3 were not specified."""
         with pytest.raises(ValueError, match=r"not found in the DataCatalog"):
-            IdempotentSequentialRunner().run(unfinished_outputs_pipeline, DataCatalog({
-                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={})
-            }))
+            IdempotentSequentialRunner().run(
+                unfinished_outputs_pipeline,
+                DataCatalog(
+                    {IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={})}
+                ),
+            )
 
 
 class LoggingDataSet(AbstractDataSet):
@@ -701,10 +719,12 @@ class TestSequentialRunnerRelease:
                 node(sink, "dataset", None, name="fred"),
             ]
         )
-        catalog = DataCatalog({
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            "dataset": LoggingDataSet(log, "dataset")
-        })
+        catalog = DataCatalog(
+            {
+                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+                "dataset": LoggingDataSet(log, "dataset"),
+            }
+        )
         IdempotentSequentialRunner().run(pipeline, catalog)
 
         # we want to the release after both the loads
@@ -742,9 +762,11 @@ class TestSequentialRunnerRelease:
     )
     def test_confirms(self, mocker, pipeline):
         fake_dataset_instance = mocker.Mock()
-        catalog = DataCatalog(data_sets={
-            IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
-            "ds1": fake_dataset_instance
-        })
+        catalog = DataCatalog(
+            data_sets={
+                IDEMPOTENT_STATE_STORAGE_CATALOG_NAME: MemoryDataSet(data={}),
+                "ds1": fake_dataset_instance,
+            }
+        )
         IdempotentSequentialRunner().run(pipeline, catalog)
         fake_dataset_instance.confirm.assert_called_once_with()

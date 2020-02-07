@@ -60,9 +60,7 @@ def run_node_idempotently(
     # Hash them as the key after loading
     for parameter_input in parameter_inputs:
         # Update our idempotency state with new hashes
-        state.update_run_id(
-            parameter_input, catalog.load(parameter_input)
-        )
+        state.update_run_id(parameter_input, catalog.load(parameter_input))
 
     # Find all output that are MemoryDataSet
     memory_outputs = [

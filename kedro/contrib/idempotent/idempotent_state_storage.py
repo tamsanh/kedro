@@ -5,7 +5,7 @@ from typing import List, Any
 
 from kedro.io.data_catalog import MemoryDataSet, DataCatalog
 
-IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = 'idempotent_state_storage'
+IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = "idempotent_state_storage"
 
 
 class IdempotentStateStorage:
@@ -18,25 +18,36 @@ class IdempotentStateStorage:
         try:
             state_data = catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)
         except Exception as e:
-            raise IdempotentStateStorageLoadException(f'Failed to load DataCatalog({self.data_set_name})')
+            raise IdempotentStateStorageLoadException(
+                f"Failed to load DataCatalog({self.data_set_name})"
+            )
 
         if type(state_data) is not dict:
             raise IdempotentStateStorageValueException(
-                f'Content of DataCatalog({self.data_set_name}) should be a dictionary'
+                f"Content of DataCatalog({self.data_set_name}) should be a dictionary"
             )
 
-        run_id_state = state_data.get('run_id_state', {
-            # "ds1": "qwer-qwer-wqer",
-            # "ds2": "adsf-asdf-adsf"
-        })
-        input_state = state_data.get('input_state', {
-            # "node1": {},
-            # "node2": {
-            #     "ds1": "qwer-qwer-qwer"
-        })
-        nodes_have_been_run = state_data.get('nodes_have_been_run', {
-            # "node1": True
-        })
+        run_id_state = state_data.get(
+            "run_id_state",
+            {
+                # "ds1": "qwer-qwer-wqer",
+                # "ds2": "adsf-asdf-adsf"
+            },
+        )
+        input_state = state_data.get(
+            "input_state",
+            {
+                # "node1": {},
+                # "node2": {
+                #     "ds1": "qwer-qwer-qwer"
+            },
+        )
+        nodes_have_been_run = state_data.get(
+            "nodes_have_been_run",
+            {
+                # "node1": True
+            },
+        )
 
         self.run_id_state = run_id_state
         self.input_state = input_state
@@ -44,9 +55,9 @@ class IdempotentStateStorage:
 
     def save(self):
         state = {
-            'run_id_state': self.run_id_state,
-            'input_state': self.input_state,
-            'nodes_have_been_run': self.nodes_have_been_run
+            "run_id_state": self.run_id_state,
+            "input_state": self.input_state,
+            "nodes_have_been_run": self.nodes_have_been_run,
         }
         self.catalog.save(self.data_set_name, state)
 
