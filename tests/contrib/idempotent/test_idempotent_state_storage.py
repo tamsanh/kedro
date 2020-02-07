@@ -3,7 +3,11 @@ import pandas as pd
 from uuid import uuid4
 from datetime import datetime
 
-from kedro.contrib.idempotent.idempotent_state_storage import IdempotentStateStorage
+from kedro.contrib.idempotent.idempotent_state_storage import (
+    IdempotentStateStorage,
+    IdempotentStateStorageLoadException,
+    IdempotentStateStorageValueException
+)
 from kedro.io.data_catalog import DataCatalog, MemoryDataSet
 
 
@@ -47,6 +51,18 @@ def catalog_with_state_update(state_storage_with_update):
     return DataCatalog({
         "idempotent_state_storage": MemoryDataSet(data=state_storage_with_update)
     })
+
+
+class TestInitIdempotentStateStorage:
+    def test_no_catalog(self):
+        with pytest.raises(IdempotentStateStorageLoadException):
+            assert IdempotentStateStorage(DataCatalog())
+
+    def test_not_dict(self):
+        with pytest.raises(IdempotentStateStorageValueException):
+            assert IdempotentStateStorage(DataCatalog({
+                "idempotent_state_storage": MemoryDataSet(data="")
+            }))
 
 
 class TestIdempotentStateStorage:

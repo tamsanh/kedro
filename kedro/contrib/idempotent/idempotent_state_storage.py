@@ -9,22 +9,21 @@ IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = 'idempotent_state_storage'
 
 
 class IdempotentStateStorage:
-    def __init__(self, catalog: DataCatalog, state_catalog_entry: str = None):
+    def __init__(self, catalog: DataCatalog, data_set_name: str = None):
         self.catalog = catalog
-        if state_catalog_entry is None:
-            state_catalog_entry = IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
-        self.state_catalog_entry = state_catalog_entry
+        if data_set_name is None:
+            data_set_name = IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
+        self.data_set_name = data_set_name
 
         try:
             state_data = catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)
         except Exception as e:
-            print(
-                "Failed to load data for DataCatalog({}) \n".format(self.state_catalog_entry),
-                "Error is: \n{}".format(str(e)),
-            )
-            return
+            raise IdempotentStateStorageLoadException(f'Failed to load DataCatalog({self.data_set_name})')
 
-        assert type(state_data) is dict
+        if type(state_data) is not dict:
+            raise IdempotentStateStorageValueException(
+                f'Content of DataCatalog({self.data_set_name}) should be a dictionary'
+            )
 
         run_id_state = state_data.get('run_id_state', {
             # "ds1": "qwer-qwer-wqer",
@@ -43,13 +42,13 @@ class IdempotentStateStorage:
         self.input_state = input_state
         self.nodes_have_been_run = nodes_have_been_run
 
-    def __del__(self):
+    def save(self):
         state = {
             'run_id_state': self.run_id_state,
             'input_state': self.input_state,
             'nodes_have_been_run': self.nodes_have_been_run
         }
-        self.catalog.save(self.state_catalog_entry, state)
+        self.catalog.save(self.data_set_name, state)
 
     @staticmethod
     def generate_run_id(data: Any = None):
@@ -108,3 +107,11 @@ class IdempotentStateStorage:
         )
 
         return actual_run_ids != expected_run_ids
+
+
+class IdempotentStateStorageLoadException(Exception):
+    pass
+
+
+class IdempotentStateStorageValueException(Exception):
+    pass

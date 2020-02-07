@@ -103,6 +103,7 @@ class IdempotentSequentialRunner(AbstractRunner):
     def __init__(self):
         super().__init__()
         self.force_run = False
+        self.state_storage = None
 
     def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
         """Factory method for creating the default data set for the runner.
@@ -127,7 +128,8 @@ class IdempotentSequentialRunner(AbstractRunner):
         Raises:
             Exception: in case of any downstream node failure.
         """
-        self.state_storage = IdempotentStateStorage(catalog)
+        if self.state_storage is None:
+            self.state_storage = IdempotentStateStorage(catalog)
 
         nodes = pipeline.nodes
         done_nodes = set()
@@ -154,7 +156,7 @@ class IdempotentSequentialRunner(AbstractRunner):
             self._logger.info(
                 "Completed %d out of %d tasks", exec_index + 1, len(nodes)
             )
-        del self.state_storage
+        self.state_storage.save()
 
 
 class ForcedIdempotentSequentialRunner(IdempotentSequentialRunner):
