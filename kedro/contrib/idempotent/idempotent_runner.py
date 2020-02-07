@@ -31,12 +31,15 @@ of provided nodes.
 """
 from collections import Counter
 from itertools import chain
+import logging
 
 from kedro.contrib.idempotent.idempotent_state_storage import IdempotentStateStorage
 from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.runner.runner import AbstractRunner
+
+LOGGER = logging.getLogger(__name__)
 
 
 def run_node_idempotently(
@@ -74,6 +77,7 @@ def run_node_idempotently(
         not has_been_run or inputs_have_changed or len(memory_outputs) > 0 or force_run
     )
     if not should_run_node:
+        LOGGER.info(f"Skipping node {node.name}.")
         return node
 
     inputs = {name: catalog.load(name) for name in node.inputs}
