@@ -102,10 +102,10 @@ class IdempotentSequentialRunner(AbstractRunner):
     topological sort of provided nodes.
     """
 
-    def __init__(self):
+    def __init__(self, state_storage: IdempotentStateStorage = None):
         super().__init__()
         self.force_run = False
-        self.state_storage = None
+        self.state_storage = state_storage
 
     def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
         """Factory method for creating the default data set for the runner.
@@ -162,6 +162,6 @@ class IdempotentSequentialRunner(AbstractRunner):
 
 
 class ForcedIdempotentSequentialRunner(IdempotentSequentialRunner):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *agrs, **kwargs):
+        super().__init__(*agrs, **kwargs)
         self.force_run = True

@@ -4,20 +4,38 @@ import pandas as pd
 from uuid import uuid4
 from typing import List, Any
 
-from kedro.io.data_catalog import MemoryDataSet, DataCatalog
-
-IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = "idempotent_state_storage"
+from kedro.io.data_catalog import DataCatalog
 
 
 class IdempotentStateStorage:
-    def __init__(self, catalog: DataCatalog, data_set_name: str = None):
+    IDEMPOTENT_STATE_STORAGE_CATALOG_NAME = "idempotent_state_storage"
+
+    def __init__(self, catalog: DataCatalog = None, data_set_name: str = None):
+        self.catalog = catalog
+        self.data_set_name = data_set_name
+        self.run_id_state = {
+            # "ds1": "qwer-qwer-wqer",
+            # "ds2": "adsf-asdf-adsf"
+        }
+        self.input_state = {
+            # "node1": {},
+            # "node2": {
+            #     "ds1": "qwer-qwer-qwer"
+        }
+        self.nodes_have_been_run = {
+            # "node1": True
+        }
+        if catalog is not None:
+            self.load(catalog, data_set_name)
+
+    def load(self, catalog: DataCatalog, data_set_name: str = None):
         self.catalog = catalog
         if data_set_name is None:
-            data_set_name = IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
+            data_set_name = IdempotentStateStorage.IDEMPOTENT_STATE_STORAGE_CATALOG_NAME
         self.data_set_name = data_set_name
 
         try:
-            state_data = catalog.load(IDEMPOTENT_STATE_STORAGE_CATALOG_NAME)
+            state_data = catalog.load(self.data_set_name)
         except Exception as e:
             raise IdempotentStateStorageLoadException(
                 f"Failed to load DataCatalog({self.data_set_name})"
@@ -28,31 +46,9 @@ class IdempotentStateStorage:
                 f"Content of DataCatalog({self.data_set_name}) should be a dictionary"
             )
 
-        run_id_state = state_data.get(
-            "run_id_state",
-            {
-                # "ds1": "qwer-qwer-wqer",
-                # "ds2": "adsf-asdf-adsf"
-            },
-        )
-        input_state = state_data.get(
-            "input_state",
-            {
-                # "node1": {},
-                # "node2": {
-                #     "ds1": "qwer-qwer-qwer"
-            },
-        )
-        nodes_have_been_run = state_data.get(
-            "nodes_have_been_run",
-            {
-                # "node1": True
-            },
-        )
-
-        self.run_id_state = run_id_state
-        self.input_state = input_state
-        self.nodes_have_been_run = nodes_have_been_run
+        self.run_id_state = state_data.get("run_id_state", {})
+        self.input_state = state_data.get("input_state", {})
+        self.nodes_have_been_run = state_data.get("nodes_have_been_run", {})
 
     def save(self):
         state = {
@@ -73,7 +69,7 @@ class IdempotentStateStorage:
     def get_hash_value(data):
         data_str = json.dumps(data, sort_keys=True, default=str)
         md5 = hashlib.md5()
-        md5.update(data_str.encode('utf-8'))
+        md5.update(data_str.encode("utf-8"))
         hash_value = md5.hexdigest()
 
         if type(data) == pd.DataFrame:
