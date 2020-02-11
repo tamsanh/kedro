@@ -29,9 +29,9 @@
 used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
-
 from collections import Counter
 from itertools import chain
+import logging
 
 from kedro.contrib.idempotent.idempotent_state_storage import IdempotentStateStorage
 from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
@@ -39,30 +39,60 @@ from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.runner.runner import AbstractRunner
 
+LOGGER = logging.getLogger(__name__)
 
-def run_node_idempotently(node: Node, catalog: DataCatalog, state: IdempotentStateStorage) -> Node:
+
+def run_node_idempotently(
+    node: Node, catalog: DataCatalog, state: IdempotentStateStorage, force_run: bool
+) -> Node:
     """Run a single `Node` with inputs from and outputs to the `catalog`.
 
     Args:
         node: The ``Node`` to run.
         catalog: A ``DataCatalog`` containing the node's inputs and outputs.
         state: An ``IdempotentStateStorage`` to reference node runs
+        force_run: boolean to force run all node regardless of state
 
     Returns:
         The node argument.
 
     """
-    inputs_have_changed = state.node_inputs_have_changed(
-        node.name,
-        node.inputs
+
+    # Find all inputs that are parameters
+    parameter_inputs = [i for i in node.inputs if i.startswith("params:")]
+    # Hash them as the key after loading
+    for parameter_input in parameter_inputs:
+        # Update our idempotency state with new hashes
+        state.update_run_id(parameter_input, catalog.load(parameter_input))
+
+    # Find all output that are MemoryDataSet
+    memory_outputs = [
+        o for o in node.outputs if type(catalog._data_sets[o]) is MemoryDataSet
+    ]
+
+    # Judge if the node should be run
+    inputs_have_changed = state.node_inputs_have_changed(node.name, node.inputs)
+    has_been_run = state.node_has_been_run(node.name)
+    should_run_node = (
+        not has_been_run or inputs_have_changed or len(memory_outputs) > 0 or force_run
     )
-    if not inputs_have_changed:
+    if not should_run_node:
+        LOGGER.info(f"Skipping node {node.name}.")
         return node
 
     inputs = {name: catalog.load(name) for name in node.inputs}
     outputs = node.run(inputs)
     for name, data in outputs.items():
         catalog.save(name, data)
+        if type(catalog._data_sets[name]) is MemoryDataSet:
+            state.update_run_id(name, data)
+        else:
+            state.update_run_id(name)
+    for name in node.confirms:
+        catalog.confirm(name)
+
+    state.update_inputs(node.name, node.inputs)
+    state.update_node_run_status(node.name)
     return node
 
 
@@ -72,9 +102,10 @@ class IdempotentSequentialRunner(AbstractRunner):
     topological sort of provided nodes.
     """
 
-    def __init__(self):
+    def __init__(self, state_storage: IdempotentStateStorage = None):
         super().__init__()
-        self.state_storage = IdempotentStateStorage()
+        self.force_run = False
+        self.state_storage = state_storage
 
     def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
         """Factory method for creating the default data set for the runner.
@@ -99,6 +130,9 @@ class IdempotentSequentialRunner(AbstractRunner):
         Raises:
             Exception: in case of any downstream node failure.
         """
+        if self.state_storage is None:
+            self.state_storage = IdempotentStateStorage(catalog)
+
         nodes = pipeline.nodes
         done_nodes = set()
 
@@ -106,7 +140,7 @@ class IdempotentSequentialRunner(AbstractRunner):
 
         for exec_index, node in enumerate(nodes):
             try:
-                run_node_idempotently(node, catalog, self.state_storage)
+                run_node_idempotently(node, catalog, self.state_storage, self.force_run)
                 done_nodes.add(node)
             except Exception:
                 self._suggest_resume_scenario(pipeline, done_nodes)
@@ -124,3 +158,10 @@ class IdempotentSequentialRunner(AbstractRunner):
             self._logger.info(
                 "Completed %d out of %d tasks", exec_index + 1, len(nodes)
             )
+        self.state_storage.save()
+
+
+class ForcedIdempotentSequentialRunner(IdempotentSequentialRunner):
+    def __init__(self, *agrs, **kwargs):
+        super().__init__(*agrs, **kwargs)
+        self.force_run = True
